@@ -194,7 +194,7 @@ def to_sarif(results: Iterable[Result]) -> str:
         "version": "2.1.0",
         "runs": [{
             "tool": {"driver": {"name": "outloud", "version": __version__,
-                                "informationUri": "https://github.com/superzackx/outloud", "rules": rules}},
+                                "informationUri": "https://github.com/visionably/outloud", "rules": rules}},
             "taxonomies": [{"name": "WCAG 2.2", "version": "2.2", "organization": "W3C",
                             "informationUri": "https://www.w3.org/TR/WCAG22/", "taxa": taxa}],
             "results": sarif_results,
