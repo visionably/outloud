@@ -1,0 +1,927 @@
+# outloud rule catalogue.
+#
+# Every rule the checker can run, as data. A rule's code lives in
+# src/outloud/rules/<module>.py and registers under the `id` here; this file
+# carries what a reader needs to understand a finding: the plain-English
+# claim, the standard it rests on, which layer it belongs to, which WCAG 2.2
+# success criteria it tests, and what to change.
+#
+#   layer: conformance  — a requirement of ISO 14289-1 (PDF/UA-1) as tested
+#                         by the Matterhorn Protocol. veraPDF and PAC test the
+#                         same requirement; results should agree.
+#   layer: semantic     — a defect a conformant file can still carry: the tags
+#                         are legal but do not match the page, or the words a
+#                         screen reader is given are not the words a person
+#                         would use. No validator tests these.
+#
+#   severity: error     — a screen-reader user loses content or cannot proceed
+#             warning   — content is reachable but degraded or misleading
+#             info      — worth a look; not counted in the verdict
+#
+#   clause      ISO 14289-1:2014 clause the rule rests on.
+#   matterhorn  Matterhorn Protocol 1.1 checkpoint (01–31). Semantic rules
+#               carry the checkpoint their subject belongs to; the PDF/UA
+#               view reports them beside it as "beyond the protocol".
+#   wcag        WCAG 2.2 success criteria the rule tests. Empty for rules
+#               that are PDF/UA housekeeping with no WCAG counterpart.
+#   requires    the document feature the rule is about; a file without it
+#               gets "not applicable" for the rule rather than "pass".
+#               Vocabulary: struct, text, fonts, headings, tables, lists,
+#               figures, formulas, notes, links, annots, forms, acroform,
+#               encrypted, oc, embedded, lang, title, pages3, source.
+#   fix         what to change, in one sentence, for the person who has to.
+#
+# `status: planned` marks a rule described here but not yet implemented; the
+# CLI reports it as "not run" so the gap is visible rather than silent.
+#
+# `verapdf: no` marks a conformance rule that veraPDF's PDF/UA-1 profile
+# (release 1.26) does not test. scripts/compare_verapdf.py leaves these out of
+# the agreement figure and reports them separately.
+
+document:
+  - id: DOC-001
+    title: Document is not marked as tagged
+    claim: The catalog's /MarkInfo dictionary must carry /Marked true; without it a reader does not consult the structure tree at all.
+    layer: conformance
+    clause: "7.1"
+    matterhorn: "01"
+    wcag: ["1.3.1"]
+    severity: error
+    verapdf: no
+    fix: Set /MarkInfo << /Marked true >> in the document catalog when the file is tagged.
+  - id: DOC-002
+    title: No structure tree
+    claim: The catalog has no /StructTreeRoot, so the document has no logical structure for assistive technology to read.
+    layer: conformance
+    clause: "7.1"
+    matterhorn: "01"
+    wcag: ["1.3.1", "1.3.2"]
+    severity: error
+    fix: Tag the document (export with tags from the authoring tool, or add tags in a remediation tool) so the catalog has a /StructTreeRoot.
+  - id: DOC-003
+    title: Structure tree is marked suspect
+    claim: /MarkInfo /Suspects is true, declaring that the tags may not reflect the content; a conforming file must not say this.
+    layer: conformance
+    clause: "7.1"
+    matterhorn: "01"
+    wcag: ["1.3.1"]
+    severity: error
+    fix: Review the tags, then set /Suspects false or remove it.
+  - id: DOC-010
+    title: Document has no title
+    claim: The XMP metadata carries no dc:title (and the Info dictionary no /Title), so a screen reader announces the file name.
+    layer: conformance
+    clause: "7.1"
+    matterhorn: "06"
+    wcag: ["2.4.2"]
+    severity: error
+    fix: Give the document a title in its properties; the tool writes it to XMP dc:title.
+  - id: DOC-011
+    title: Title is not displayed
+    claim: /ViewerPreferences /DisplayDocTitle is absent or false, so viewers show the file name in the window title instead of the document title.
+    layer: conformance
+    clause: "7.1"
+    matterhorn: "07"
+    wcag: ["2.4.2"]
+    severity: error
+    fix: Set /ViewerPreferences << /DisplayDocTitle true >> (in Acrobat, Initial View, Show Document Title).
+  - id: DOC-012
+    title: No PDF/UA identification in metadata
+    claim: The XMP metadata does not declare pdfuaid:part, so the file does not claim conformance and validators do not test it as PDF/UA.
+    layer: conformance
+    clause: "7.1"
+    matterhorn: "06"
+    wcag: []
+    severity: error
+    fix: Add pdfuaid:part = 1 to the XMP metadata once the file conforms; do not claim it before.
+  - id: DOC-013
+    title: Document has no default language
+    claim: The catalog carries no /Lang, so a screen reader must guess the language of every word it reads.
+    layer: conformance
+    clause: "7.2"
+    matterhorn: "11"
+    wcag: ["3.1.1"]
+    severity: error
+    fix: Set the document language in the file's properties so the catalog carries /Lang (for example "en-IN").
+  - id: DOC-014
+    title: Language tag is not well-formed
+    claim: /Lang is present but is not a usable BCP 47 tag (for example "english" or "en_US"), so readers ignore it. veraPDF accepts any syntactically valid tag, including unregistered words; this rule asks for a two- or three-letter primary subtag.
+    layer: conformance
+    clause: "7.2"
+    matterhorn: "11"
+    wcag: ["3.1.1"]
+    requires: lang
+    severity: warning
+    fix: Use a BCP 47 tag such as "en", "en-GB" or "hi-IN", with a hyphen, not a language name.
+  - id: DOC-015
+    title: Info title disagrees with the XMP title
+    claim: The Info dictionary's /Title and XMP dc:title say different things, so viewers and readers that prefer one over the other announce different titles for the same file.
+    layer: conformance
+    clause: "7.1"
+    matterhorn: "06"
+    wcag: ["2.4.2"]
+    requires: title
+    severity: warning
+    verapdf: no
+    fix: Set the title once in the document properties and let the tool write both, or remove the stale /Title from the Info dictionary.
+  - id: DOC-020
+    title: Assistive technology is locked out by permissions
+    claim: The document is encrypted and its permissions deny content extraction for accessibility, so a screen reader may not read it at all.
+    layer: conformance
+    clause: "7.1"
+    matterhorn: "26"
+    wcag: ["1.3.1"]
+    requires: encrypted
+    severity: error
+    fix: In the security settings, allow content extraction for accessibility (permission bit 10) or remove the encryption.
+  - id: DOC-030
+    title: Optional content configuration hides content from readers
+    claim: An optional content configuration dictionary (the default /D or an alternate in /Configs) has no /Name, or carries an /AS entry that switches layers by viewer state, so content can appear to a sighted reader that assistive technology cannot account for.
+    layer: conformance
+    clause: "7.10"
+    matterhorn: "20"
+    wcag: ["1.3.1"]
+    requires: oc
+    severity: error
+    fix: Give every optional content configuration a /Name and remove its /AS entry; flatten layers that are not needed.
+  - id: DOC-021
+    title: Document contains an XFA form
+    claim: The interactive form dictionary carries /XFA; PDF/UA-1 forbids dynamic XFA forms, which assistive technology cannot read.
+    layer: conformance
+    clause: "7.15"
+    matterhorn: "25"
+    wcag: ["4.1.2"]
+    requires: acroform
+    severity: error
+    fix: Rebuild the form as an AcroForm (no XFA) with tagged fields.
+  - id: DOC-031
+    title: Embedded file has no description
+    claim: An embedded file specification lacks /F and /UF names or a /Desc, so a reader cannot tell what the attachment is.
+    layer: conformance
+    clause: "7.11"
+    matterhorn: "21"
+    wcag: []
+    requires: embedded
+    severity: warning
+    fix: Give each attachment a file name (/F and /UF) and a one-line description (/Desc).
+  - id: DOC-040
+    title: Title is the file name or a fragment
+    claim: dc:title is the raw file name, a mid-sentence fragment, a letterhead line or a date stamp, which is what DisplayDocTitle makes a screen reader announce.
+    layer: semantic
+    matterhorn: "06"
+    wcag: ["2.4.2"]
+    requires: title
+    severity: warning
+    fix: Set a title that names the document the way a person would ("Annual report 2025", not "report_final_v2.pdf").
+
+tagging:
+  - id: TAG-001
+    title: Content is neither tagged nor an artifact
+    claim: Text or graphics are painted outside any marked-content sequence, so a reader cannot know whether they are content or decoration; they are silently skipped.
+    layer: conformance
+    clause: "7.1"
+    matterhorn: "01"
+    wcag: ["1.3.1", "1.3.2"]
+    severity: error
+    fix: Tag the content with a structure element, or mark it /Artifact if it is decoration or page furniture.
+  - id: TAG-002
+    title: Real content is marked as an artifact
+    claim: Sentences of prose are inside /Artifact sequences, which tells every reader to skip them; artifacting is for pagination and decoration, not content.
+    layer: semantic
+    clause: "7.1"
+    matterhorn: "01"
+    wcag: ["1.3.1"]
+    severity: error
+    fix: Move the text out of the artifact into a structure element (P, H, LI) so it is read.
+  - id: TAG-003
+    title: Words the page prints that no element announces
+    claim: Text visible on the page appears in no structure element's content, alternative text or actual text; whatever the reason, the reader never hears it.
+    layer: semantic
+    matterhorn: "01"
+    wcag: ["1.3.1"]
+    requires: struct
+    severity: warning
+    fix: Find the text on the page and make sure a structure element contains it or its alternative.
+  - id: TAG-004
+    title: Tagged content and artifacts are nested in each other
+    claim: A marked-content sequence that a structure element claims opens inside an /Artifact, or an /Artifact opens inside such a sequence, so the same glyphs are both content and decoration. veraPDF 1.26 has rules for this (7.1-1, 7.1-2) but did not flag the fixture's construction, so it is listed as not comparable.
+    layer: conformance
+    clause: "7.1"
+    matterhorn: "01"
+    wcag: ["1.3.1"]
+    requires: struct
+    severity: error
+    verapdf: no
+    fix: Close the artifact before the tagged content starts, or the tagged content before the artifact; never nest one in the other.
+  - id: TAG-010
+    title: Non-standard structure type is not role-mapped
+    claim: A structure element uses a type that is not a standard PDF structure type and is not mapped to one in /RoleMap, so readers do not know what it is.
+    layer: conformance
+    clause: "7.1"
+    matterhorn: "02"
+    wcag: ["1.3.1", "4.1.2"]
+    requires: struct
+    severity: error
+    fix: Add a /RoleMap entry mapping the custom type to the nearest standard type (P, Span, Div, H1, ...).
+  - id: TAG-011
+    title: Role map is circular
+    claim: /RoleMap maps a type to itself, directly or through other types, so resolution never reaches a standard type.
+    layer: conformance
+    clause: "7.1"
+    matterhorn: "02"
+    wcag: ["1.3.1", "4.1.2"]
+    requires: struct
+    severity: error
+    fix: Make every /RoleMap chain end at a standard structure type.
+  - id: TAG-012
+    title: Standard structure type is remapped
+    claim: /RoleMap maps a standard structure type to a different type, which changes what every element of that type means.
+    layer: conformance
+    clause: "7.1"
+    matterhorn: "02"
+    wcag: ["1.3.1", "4.1.2"]
+    requires: struct
+    severity: error
+    fix: Remove /RoleMap entries whose key is a standard type; only custom types may be mapped.
+  - id: TAG-020
+    title: Empty structure element
+    claim: A structure element has no content, no children, no alternative text and no actual text; a reader announces its role and then nothing.
+    layer: semantic
+    matterhorn: "09"
+    wcag: ["1.3.1"]
+    requires: struct
+    severity: warning
+    fix: Delete the empty element, or give it the content it was meant to hold.
+  - id: TAG-021
+    title: Element points at a page that does not exist
+    claim: A structure element's /Pg or a marked-content reference points at a page object not in the page tree, so its content can never be found.
+    layer: conformance
+    clause: "7.1"
+    matterhorn: "01"
+    wcag: ["1.3.1"]
+    requires: struct
+    severity: error
+    verapdf: no
+    fix: Repoint /Pg (or the /MCR's /Pg) at the page that holds the content, or remove the element if the page is gone.
+  - id: TAG-022
+    title: Marked content is referenced by more than one element
+    claim: The same marked-content id on one page is claimed by two structure elements, so it is read twice or its meaning is ambiguous.
+    layer: conformance
+    clause: "7.1"
+    matterhorn: "01"
+    wcag: ["1.3.1", "1.3.2"]
+    requires: struct
+    severity: error
+    verapdf: no
+    fix: Leave each marked-content id in exactly one element's /K; give the second element its own content.
+  - id: TAG-023
+    title: Structure element has no parent entry
+    claim: A structure element dictionary lacks /P, which ISO 32000-1 requires; readers that walk upward from content cannot place it.
+    layer: conformance
+    clause: "7.1"
+    matterhorn: "01"
+    wcag: ["1.3.1"]
+    requires: struct
+    severity: error
+    fix: Set /P on every structure element to the element (or the structure tree root) that lists it in /K.
+  - id: TAG-040
+    title: Reference XObject
+    claim: A form XObject carries /Ref, importing content from another file at view time; PDF/UA-1 forbids this because the imported content has no structure here.
+    layer: conformance
+    clause: "7.20"
+    matterhorn: "30"
+    wcag: ["1.3.1"]
+    requires: xobjects
+    severity: error
+    fix: Embed the referenced content in this file as an ordinary, tagged form XObject.
+  - id: TAG-030
+    title: Page-sized figure over a text layer
+    claim: A /Figure whose bounding box covers nearly the whole page sits on a page that carries tagged text; the page scan is being described as a picture before its content is read.
+    layer: semantic
+    matterhorn: "13"
+    wcag: ["1.1.1", "1.3.1"]
+    requires: figures
+    severity: warning
+    fix: Mark the full-page scan image as an artifact and let the recognised text carry the content.
+  - id: TAG-031
+    title: Alternative text hides real content
+    claim: A structure element carries /Alt or /ActualText much shorter than the text it replaces, so a sentence of content is reduced to a phrase.
+    layer: semantic
+    wcag: ["1.1.1"]
+    requires: struct
+    severity: error
+    fix: Remove the /Alt or /ActualText from text content, or make it say everything the text says.
+  - id: TAG-032
+    title: Actual text does not account for the glyphs it replaces
+    claim: /ActualText is set on an element whose visible words are not present in it, so those words are lost to every reader that honours the replacement.
+    layer: semantic
+    wcag: ["1.1.1"]
+    requires: struct
+    severity: error
+    fix: Set /ActualText only where it repeats the visible text exactly (hyphenation, ligatures, drop caps); otherwise remove it.
+
+text:
+  - id: TXT-001
+    title: Font is not embedded
+    claim: A font used on the page is not embedded, so glyph shapes and, often, character mappings depend on the reader's machine.
+    layer: conformance
+    clause: "7.21.3.1"
+    matterhorn: "31"
+    wcag: []
+    requires: fonts
+    severity: error
+    fix: Re-export with all fonts embedded (subset embedding is fine).
+  - id: TXT-002
+    title: Characters cannot be mapped to Unicode
+    claim: A font has no /ToUnicode CMap and no standard encoding from which text can be derived, so its glyphs are read as nothing or as replacement characters.
+    layer: conformance
+    clause: "7.21.7"
+    matterhorn: "10"
+    wcag: ["1.3.1"]
+    requires: fonts
+    severity: error
+    fix: Add a /ToUnicode CMap to the font, or re-export from the authoring tool, which writes one.
+  - id: TXT-003
+    title: Glyphs map to no character
+    claim: Codes shown on the page are absent from the font's /ToUnicode CMap, so those glyphs are silent or wrong when read or copied.
+    layer: conformance
+    clause: "7.21.7"
+    matterhorn: "10"
+    wcag: ["1.3.1"]
+    requires: fonts
+    severity: error
+    fix: Extend the /ToUnicode CMap to cover every code the page shows; the evidence lists the first codes.
+  - id: TXT-004
+    title: Unicode mapping is legal but wrong
+    claim: The /ToUnicode CMap maps many glyphs to the same character, to control characters, or to the private-use area, so the extracted text is not the text on the page.
+    layer: semantic
+    matterhorn: "10"
+    wcag: ["1.3.1"]
+    requires: fonts
+    severity: warning
+    fix: Rebuild the /ToUnicode CMap from the font's own glyph names or cmap so each glyph maps to the character it draws.
+  - id: TXT-005
+    title: Text shows the .notdef glyph
+    claim: A text-showing operator references glyph 0 of a composite font, the .notdef box, so a character the author typed has no glyph and no meaning.
+    layer: conformance
+    clause: "7.21.8"
+    matterhorn: "31"
+    wcag: ["1.3.1"]
+    requires: fonts
+    severity: error
+    fix: Find the character the font lacks and embed a font that has it, or correct the text.
+  - id: TXT-006
+    title: Unicode mapping to a non-character
+    claim: A /ToUnicode entry maps a code to U+0000, U+FEFF or U+FFFE, which are not characters; the glyph is read as nothing.
+    layer: conformance
+    clause: "7.21.7"
+    matterhorn: "10"
+    wcag: ["1.3.1"]
+    requires: fonts
+    severity: error
+    fix: Map the code to the character it draws; a space, if the glyph is blank.
+  - id: TXT-007
+    title: CID font lacks a glyph map
+    claim: An embedded CIDFontType2 has no /CIDToGIDMap, so the mapping from character ids to glyphs in the TrueType program is undefined and text extraction can go wrong.
+    layer: conformance
+    clause: "7.21.3.2"
+    matterhorn: "31"
+    wcag: []
+    requires: fonts
+    severity: error
+    fix: Set /CIDToGIDMap /Identity (or an explicit stream) on the CIDFontType2 dictionary.
+  - id: TXT-010
+    title: Invisible text with no raster to carry it
+    claim: A page's text is almost entirely in render mode 3 (invisible) but no image of sufficient resolution underlies it; the page looks blank to a sighted reader.
+    layer: semantic
+    wcag: []
+    requires: text
+    severity: error
+    fix: Render the text visibly, or restore the page image the invisible text was meant to sit on.
+  - id: TXT-011
+    title: Text in a Form XObject is not tagged
+    claim: A form XObject drawn on the page contains text-showing operators with no marked content of its own and no marked content around the Do that draws it.
+    layer: conformance
+    clause: "7.1"
+    matterhorn: "01"
+    wcag: ["1.3.1", "1.3.2"]
+    requires: xobjects
+    severity: error
+    fix: Wrap the Do operator in a marked-content sequence owned by a structure element, or tag the text inside the form.
+
+headings:
+  - id: HDG-001
+    title: Heading level is skipped
+    claim: A heading of level n is followed by a heading of level n+2 or deeper with no n+1 between, so the outline a reader navigates has a hole in it.
+    layer: conformance
+    clause: "7.4"
+    matterhorn: "14"
+    wcag: ["1.3.1", "2.4.6"]
+    requires: headings
+    severity: error
+    fix: Use the next level down (H2 after H1), or promote the deeper heading.
+  - id: HDG-002
+    title: First heading is not H1
+    claim: The first heading in the document is deeper than H1, so the outline starts below its top.
+    layer: conformance
+    clause: "7.4"
+    matterhorn: "14"
+    wcag: ["1.3.1", "2.4.6"]
+    requires: headings
+    severity: error
+    fix: Tag the document's main title as H1.
+  - id: HDG-003
+    title: Numbered and unnumbered headings are mixed
+    claim: The document uses both /H and /H1 to /H6, which PDF/UA-1 forbids; a reader cannot build one outline from both.
+    layer: conformance
+    clause: "7.4"
+    matterhorn: "14"
+    wcag: ["1.3.1", "2.4.6"]
+    requires: headings
+    severity: error
+    fix: Use H1 to H6 throughout; replace each /H with its numbered level.
+  - id: HDG-004
+    title: Heading deeper than H6 without the level attribute
+    claim: A heading beyond H6 is used without being a role-mapped type carrying its level, so the reader cannot place it in the outline.
+    layer: conformance
+    clause: "7.4"
+    matterhorn: "14"
+    wcag: ["1.3.1", "2.4.6"]
+    requires: headings
+    severity: error
+    status: planned
+    fix: Role-map H7 and deeper to H and flatten the outline where possible.
+  - id: HDG-005
+    title: More than one unnumbered heading under one parent
+    claim: A structure element has two or more /H children; the unnumbered heading form allows one heading per node, so the outline is ambiguous.
+    layer: conformance
+    clause: "7.4.4"
+    matterhorn: "14"
+    wcag: ["1.3.1", "2.4.6"]
+    requires: headings
+    severity: error
+    fix: Give each section (Sect, Art, Div) one /H, or switch to numbered headings.
+  - id: HDG-010
+    title: Heading text cannot be a heading
+    claim: A heading's text is a mid-sentence fragment, a salutation, a closing, a classification stamp or a reference number; as an outline entry it misleads.
+    layer: semantic
+    matterhorn: "14"
+    wcag: ["2.4.6"]
+    requires: headings
+    severity: warning
+    fix: Retag the text as a paragraph and tag the real heading of the section instead.
+  - id: HDG-011
+    title: Heading is a paragraph
+    claim: A heading runs to several sentences, so a reader navigating by headings hears a paragraph.
+    layer: semantic
+    matterhorn: "14"
+    wcag: ["2.4.6"]
+    requires: headings
+    severity: warning
+    fix: Keep only the heading line in the H element and tag the sentences that follow as P.
+  - id: HDG-012
+    title: No headings in a long document
+    claim: A document of many pages has no heading at all, so a reader has no way to move through it except line by line.
+    layer: semantic
+    matterhorn: "14"
+    wcag: ["1.3.1"]
+    requires: struct
+    severity: warning
+    fix: Tag the section titles as H1 to H6 so readers can navigate by heading.
+
+tables:
+  - id: TBL-001
+    title: Table has no header cells
+    claim: A /Table contains /TD cells but no /TH, so a reader hears values without knowing what column or row they belong to.
+    layer: conformance
+    clause: "7.5"
+    matterhorn: "15"
+    wcag: ["1.3.1"]
+    requires: tables
+    severity: error
+    verapdf: no
+    fix: Tag the header row (or column) cells as TH with /Scope, or retag the grid as text if it is not a table.
+  - id: TBL-002
+    title: Header cell has no scope and no headers association
+    claim: A /TH carries no /Scope attribute and no cell references it through /Headers, so a reader cannot tell which cells it heads.
+    layer: conformance
+    clause: "7.5"
+    matterhorn: "15"
+    wcag: ["1.3.1"]
+    requires: tables
+    severity: error
+    fix: Set /Scope /Column or /Row on each TH, or give cells /Headers arrays that name their TH ids.
+  - id: TBL-003
+    title: Cell is outside a row
+    claim: A /TH or /TD is not the child of a /TR, so the table grid cannot be reconstructed.
+    layer: conformance
+    clause: "7.5"
+    matterhorn: "15"
+    wcag: ["1.3.1"]
+    requires: tables
+    severity: error
+    fix: Nest every TH and TD in a TR, and every TR in the Table (or THead, TBody, TFoot).
+  - id: TBL-004
+    title: Table is irregular
+    claim: Rows have different cell counts once spans are applied, so the grid does not close and cells drift under the wrong headers.
+    layer: conformance
+    clause: "7.5"
+    matterhorn: "15"
+    wcag: ["1.3.1"]
+    requires: tables
+    severity: error
+    fix: Add the missing cells (empty TD is fine) or set /ColSpan and /RowSpan so every row fills the same number of columns.
+  - id: TBL-005
+    title: Table structure is mis-nested
+    claim: A /Table has a child that is not a row, a row group or a caption, more than one THead or TFoot, a row group with no TBody, or a Caption that is not first or last, so the table model readers rely on does not hold.
+    layer: conformance
+    clause: "7.5"
+    matterhorn: "15"
+    wcag: ["1.3.1"]
+    requires: tables
+    severity: error
+    fix: Keep only TR, THead, TBody, TFoot and one Caption (first or last) directly under Table, with at most one THead and one TFoot.
+  - id: TBL-010
+    title: Header cells are shredded
+    claim: Wrapped column headings are tagged as several rows of one-word /TH cells; the header of one column is read as four rows of noise.
+    layer: semantic
+    matterhorn: "15"
+    wcag: ["1.3.1"]
+    requires: tables
+    severity: error
+    fix: Merge the wrapped lines of each heading into one TH per column.
+  - id: TBL-011
+    title: Data cells are headed only by silence
+    claim: Data cells are associated only with empty header cells, so /Headers is present but the announced header is nothing.
+    layer: semantic
+    matterhorn: "15"
+    wcag: ["1.3.1"]
+    requires: tables
+    severity: warning
+    fix: Put the heading text in the TH cells, or point /Headers at the cells that carry it.
+  - id: TBL-012
+    title: Table is mostly empty cells
+    claim: More than six in ten cells of a table are empty, which usually means a grid asserted over content that is not tabular.
+    layer: semantic
+    matterhorn: "15"
+    wcag: ["1.3.1"]
+    requires: tables
+    severity: warning
+    fix: If the content is not a data table, retag it as paragraphs or a list; if it is, check the cell grid.
+  - id: TBL-013
+    title: One table split into several
+    claim: Two /Table elements sit back to back on one page with no text between them and column counts that sum to one grid; a single table was split.
+    layer: semantic
+    matterhorn: "15"
+    wcag: ["1.3.1"]
+    requires: tables
+    severity: warning
+    fix: Merge the fragments into one Table so the header row applies to every row.
+  - id: TBL-014
+    title: A drawn grid that no table announces
+    claim: Ruled lines on the page form a grid of cells with text inside, but no /Table covers it; the reader gets the cells as loose paragraphs.
+    layer: semantic
+    matterhorn: "15"
+    wcag: ["1.3.1"]
+    severity: warning
+    fix: Tag the grid as a Table with TR, TH and TD cells.
+  - id: TBL-015
+    title: Row content collapsed into one cell
+    claim: A row's entire content sits in a single cell while other rows have several, which usually means columns were merged in tagging.
+    layer: semantic
+    matterhorn: "15"
+    wcag: ["1.3.1"]
+    requires: tables
+    severity: warning
+    fix: Split the row into its cells, one per column, unless it is a genuine spanning row (then set /ColSpan).
+
+lists:
+  - id: LST-001
+    title: List item outside a list
+    claim: An /LI is not the child of an /L, so the reader does not know it is one of a series.
+    layer: conformance
+    clause: "7.6"
+    matterhorn: "16"
+    wcag: ["1.3.1"]
+    requires: lists
+    severity: error
+    fix: Wrap the LI elements in an L element.
+  - id: LST-002
+    title: List item without a body
+    claim: An /LI has no /LBody; its content sits directly in the item, which most readers still voice but which breaks the label-and-body model the standard expects.
+    layer: conformance
+    clause: "7.6"
+    matterhorn: "16"
+    wcag: ["1.3.1"]
+    requires: lists
+    severity: warning
+    fix: Put the item's content in an LBody child (and its bullet or number in Lbl).
+  - id: LST-003
+    title: List contains a non-item child
+    claim: An /L has a child that is not an /LI (or a nested /L or a caption), so the list's sequence is broken.
+    layer: conformance
+    clause: "7.6"
+    matterhorn: "16"
+    wcag: ["1.3.1"]
+    requires: lists
+    severity: error
+    fix: Move the stray element out of the list, or wrap it in an LI.
+  - id: LST-004
+    title: Sub-list placed beside its parent item
+    claim: A nested list is a sibling of the item it belongs to rather than inside its body, so the nesting is lost.
+    layer: conformance
+    clause: "7.6"
+    matterhorn: "16"
+    wcag: ["1.3.1"]
+    requires: lists
+    severity: warning
+    fix: Move the nested L inside the LBody of the item it belongs to.
+
+figures:
+  - id: FIG-001
+    title: Figure has no alternative text
+    claim: A /Figure carries neither /Alt nor /ActualText, so a reader hears "figure" and nothing else.
+    layer: conformance
+    clause: "7.3"
+    matterhorn: "13"
+    wcag: ["1.1.1"]
+    requires: figures
+    severity: error
+    fix: Add /Alt describing what the image shows and why it is there; mark purely decorative images as artifacts instead.
+  - id: FIG-002
+    title: Alternative text is empty or whitespace
+    claim: /Alt is present but contains no words; validators test only that the key exists.
+    layer: semantic
+    clause: "7.3"
+    matterhorn: "13"
+    wcag: ["1.1.1"]
+    requires: figures
+    severity: error
+    fix: Write the description into /Alt, or artifact the image if it is decorative.
+  - id: FIG-010
+    title: Alternative text is a placeholder
+    claim: /Alt is the image's file name, "Image", "Picture 1", a bare number, source code or LaTeX; a person would not recognise it as a description.
+    layer: semantic
+    matterhorn: "13"
+    wcag: ["1.1.1"]
+    requires: figures
+    severity: warning
+    fix: Replace the placeholder with a description a person would give over the phone.
+  - id: FIG-011
+    title: Alternative text repeats the caption
+    claim: /Alt is the same as the figure's /Caption text, so the reader hears the caption twice and never a description.
+    layer: semantic
+    matterhorn: "13"
+    wcag: ["1.1.1"]
+    requires: figures
+    severity: info
+    fix: Describe the image in /Alt; the caption already says what it is called.
+  - id: FIG-012
+    title: Alternative text is not language
+    claim: /Alt is mostly symbols, digits or a single word repeated; it does not read as a sentence in any language.
+    layer: semantic
+    matterhorn: "13"
+    wcag: ["1.1.1"]
+    requires: figures
+    severity: warning
+    fix: Rewrite /Alt as plain words.
+
+links:
+  - id: LNK-001
+    title: Link annotation is not in a Link element
+    claim: A /Link annotation is not the child of a /Link structure element (through /OBJR), so a reader cannot associate the link with its text.
+    layer: conformance
+    clause: "7.18.5"
+    matterhorn: "28"
+    wcag: ["1.3.1", "2.4.4"]
+    requires: links
+    severity: error
+    fix: Create a Link structure element around the link text and add an OBJR to the annotation in its /K.
+  - id: LNK-002
+    title: Annotation has no description
+    claim: An annotation that is not hidden carries no /Contents (and, for a link, no alternative), so a reader cannot say what it does.
+    layer: conformance
+    clause: "7.18.1"
+    matterhorn: "28"
+    wcag: ["1.1.1", "2.4.4"]
+    requires: annots
+    severity: error
+    fix: Set /Contents on the annotation to what it is or where it goes ("Annual report 2025 (PDF)").
+  - id: LNK-003
+    title: Link element has no text and no alternative
+    claim: A /Link structure element contains no marked content and no /Alt, so the link is announced without any name.
+    layer: semantic
+    matterhorn: "28"
+    wcag: ["2.4.4", "4.1.2"]
+    requires: links
+    severity: error
+    fix: Put the link's visible text inside the Link element, or give it /Alt.
+  - id: LNK-004
+    title: Annotation is hidden from readers
+    claim: An annotation's /F flags mark it Hidden or NoView while it is visible, or it lacks the Print flag, so readers and print differ from the screen.
+    layer: conformance
+    clause: "7.18.1"
+    matterhorn: "28"
+    wcag: []
+    requires: annots
+    severity: warning
+    verapdf: no
+    fix: Set the Print flag (bit 3) and clear Hidden and NoView on annotations that readers should get.
+  - id: LNK-006
+    title: Annotation is not inside an Annot element
+    claim: An annotation other than a link, widget or printer's mark is not the child of an /Annot structure element through /OBJR, so readers cannot place it in the reading order.
+    layer: conformance
+    clause: "7.18.1"
+    matterhorn: "28"
+    wcag: ["1.3.1", "1.3.2"]
+    requires: annots
+    severity: error
+    fix: Add an Annot structure element at the right place in the reading order with an OBJR to the annotation.
+  - id: LNK-005
+    title: Page with annotations has no structure tab order
+    claim: A page that carries annotations lacks /Tabs /S, so keyboard users tab through links and fields in an order unrelated to the reading order.
+    layer: conformance
+    clause: "7.18.3"
+    matterhorn: "28"
+    wcag: ["2.4.3"]
+    requires: annots
+    severity: error
+    fix: Set /Tabs /S on every page that has annotations.
+  - id: LNK-010
+    title: Address or URL is text but not a link
+    claim: An e-mail address or URL is printed on the page with no /Link annotation over it, so keyboard and screen-reader users cannot follow it.
+    layer: semantic
+    wcag: []
+    requires: text
+    severity: warning
+    fix: Add a Link annotation over the address, inside a Link structure element with /Contents.
+
+forms:
+  - id: FRM-001
+    title: Form field has no name for readers
+    claim: A widget annotation's field has no /TU (alternate field name), so the reader hears the internal field id or nothing.
+    layer: conformance
+    clause: "7.18.1"
+    matterhorn: "28"
+    wcag: ["1.3.1", "3.3.2", "4.1.2"]
+    requires: forms
+    severity: error
+    fix: Set /TU on the field to its visible label ("Date of birth"), which is what the reader announces.
+  - id: FRM-003
+    title: Form field is not inside a Form element
+    claim: A widget annotation is not the child of a /Form structure element through /OBJR, so readers cannot reach the field from the reading order.
+    layer: conformance
+    clause: "7.18.4"
+    matterhorn: "28"
+    wcag: ["1.3.1", "1.3.2", "4.1.2"]
+    requires: forms
+    severity: error
+    fix: Add a Form structure element at the field's place in the reading order with an OBJR to the widget.
+  - id: FRM-002
+    title: Field name is the internal id
+    claim: /TU is "Text1", "Signature2" or another generated id; a reader hears the id instead of what the field is for.
+    layer: semantic
+    matterhorn: "28"
+    wcag: ["3.3.2", "4.1.2"]
+    requires: forms
+    severity: warning
+    fix: Set /TU to the label a person sees next to the field.
+
+notes:
+  - id: NOTE-001
+    title: Note has no id
+    claim: A /Note structure element carries no /ID, so references cannot target it.
+    layer: conformance
+    clause: "7.9"
+    matterhorn: "19"
+    wcag: ["1.3.1"]
+    requires: notes
+    severity: error
+    fix: Give every Note element a unique /ID.
+  - id: NOTE-004
+    title: Note ids are not unique
+    claim: Two /Note elements share the same /ID, so a reference to that id is ambiguous.
+    layer: conformance
+    clause: "7.9"
+    matterhorn: "19"
+    wcag: ["1.3.1"]
+    requires: notes
+    severity: error
+    fix: Make each Note's /ID unique in the document.
+  - id: NOTE-002
+    title: Reference points nowhere
+    claim: A /Reference element has no link or note it resolves to.
+    layer: semantic
+    matterhorn: "19"
+    wcag: ["1.3.1"]
+    requires: notes
+    severity: warning
+    fix: Link the Reference to its Note (a Link annotation or a matching id), or retag it as a Span.
+  - id: NOTE-003
+    title: Note is mis-shaped
+    claim: A footnote is fragmented into several notes, merged with its neighbour, has no label, or is tagged twice; the reader hears it wrong or twice.
+    layer: semantic
+    matterhorn: "19"
+    wcag: ["1.3.1"]
+    requires: notes
+    severity: warning
+    fix: One Note per footnote, with its number in a Lbl child and its text after.
+
+math:
+  - id: MATH-001
+    title: Formula has no alternative
+    claim: A /Formula element has no /Alt (and no MathML associated file), so a reader hears nothing for the equation.
+    layer: conformance
+    clause: "7.7"
+    matterhorn: "17"
+    wcag: ["1.1.1"]
+    requires: formulas
+    severity: error
+    fix: Add /Alt that reads the equation aloud ("x equals minus b over 2a"), or attach MathML as an associated file.
+  - id: MATH-010
+    title: Formula alternative is source, not speech
+    claim: /Alt on a /Formula is LaTeX or MathML source ("\frac{QK^T}{...}"), which a reader voices as "backslash frac open brace".
+    layer: semantic
+    matterhorn: "17"
+    wcag: ["1.1.1"]
+    requires: formulas
+    severity: warning
+    fix: Write /Alt as the spoken form of the equation; keep the source in MathML if you need it.
+  - id: MATH-011
+    title: Formula hides prose
+    claim: A /Formula covers far more text than its alternative accounts for, so a sentence of prose became "an equation".
+    layer: semantic
+    matterhorn: "17"
+    wcag: ["1.1.1", "1.3.1"]
+    requires: formulas
+    severity: error
+    fix: Shrink the Formula element to the equation itself and tag the surrounding prose as P.
+
+order:
+  - id: ORD-001
+    title: Page paints content in a different order from the tag tree
+    claim: The content stream draws marked content in an order that disagrees with the structure tree, so readers that follow the stream (Preview, Chrome, copy-paste) get a different reading order from readers that follow the tags.
+    layer: semantic
+    matterhorn: "09"
+    wcag: ["1.3.2"]
+    requires: struct
+    severity: warning
+    fix: Re-emit the page content in the order of the structure tree, or reorder the tree to match the page if the page is right.
+  - id: ORD-002
+    title: Structure tree order crosses pages
+    claim: A structure element's content comes from later pages before earlier ones, so the reading order runs backwards through the document.
+    layer: semantic
+    matterhorn: "09"
+    wcag: ["1.3.2"]
+    requires: struct
+    severity: warning
+    status: planned
+    fix: Order the structure elements by page and position.
+
+navigation:
+  - id: NAV-001
+    title: Long document has no bookmarks
+    claim: A document of ten pages or more has no outline (/Outlines with entries), so a reader has no way to jump to a section; WCAG 2.4.5 asks for more than one way to find content in a document of this length.
+    layer: semantic
+    matterhorn: "27"
+    wcag: ["2.4.5"]
+    severity: warning
+    fix: Add bookmarks from the headings (most tools generate them from H1 to H3).
+
+pagination:
+  - id: PAG-001
+    title: Running header or footer is tagged as content
+    claim: Text that recurs at the same position on most pages (a running head, a folio) is inside structure elements rather than artifacts, so the reader hears it on every page.
+    layer: conformance
+    clause: "7.8"
+    matterhorn: "18"
+    wcag: ["1.3.1", "2.4.1"]
+    requires: pages3
+    severity: warning
+    fix: Mark running heads, footers and page numbers as /Artifact /Pagination.
+
+quality:
+  - id: SEM-001
+    title: Structure the source had that the output lost
+    claim: When a source PDF is supplied, the output has fewer headings, tables, lists or figures than the source; remediation must not cost a reader structure they already had.
+    layer: semantic
+    wcag: ["1.3.1"]
+    severity: error
+    requires: source
+    fix: Compare the two structure trees and restore the elements the output dropped.
+  - id: SEM-002
+    title: Text the source had that the output lost
+    claim: When a source PDF is supplied, characters present in the source's text layer are missing from the output's.
+    layer: semantic
+    wcag: ["1.3.1"]
+    severity: error
+    requires: source
+    fix: Find the pages whose text shrank and restore the runs that were dropped.
+  - id: SEM-003
+    title: Pages look different from the source
+    claim: When a source PDF is supplied, a rendered page differs visibly from the same page in the source; tagging must not change what a sighted reader sees.
+    layer: semantic
+    wcag: []
+    severity: error
+    requires: source
+    fix: Diff the renders of the flagged pages and undo whatever the remediation changed in the appearance.

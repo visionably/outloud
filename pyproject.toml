@@ -1,0 +1,54 @@
+[project]
+name = "outloud"
+version = "0.2.0"
+description = "A fast, scriptable PDF accessibility checker: PDF/UA-1 conformance plus the semantic checks a validator cannot make. Runs on macOS, Linux and Windows."
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+authors = [{ name = "Visionably", email = "opensource@visionably.ai" }]
+keywords = ["pdf", "accessibility", "pdf/ua", "wcag", "matterhorn", "a11y", "checker", "tagged-pdf"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Intended Audience :: End Users/Desktop",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Topic :: Text Processing",
+  "Topic :: Software Development :: Quality Assurance",
+]
+dependencies = [
+  "pikepdf>=8.0",
+  "pymupdf>=1.24",
+  "click>=8.1",
+  "pyyaml>=6.0",
+  "jinja2>=3.1",
+  "fonttools>=4.40",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.5"]
+
+[project.scripts]
+outloud = "outloud.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/superzackx/outloud"
+Issues = "https://github.com/superzackx/outloud/issues"
+
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/outloud"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/outloud", "README.md", "LICENSE", "docs/RULES.md"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
