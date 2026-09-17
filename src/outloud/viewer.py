@@ -1,20 +1,28 @@
-"""The viewer: `outloud file.pdf --view` opens the result in the browser.
+"""The viewer: `outloud --view` (with or without files) opens the app in the browser.
 
-A small local server (standard library only) serves one page: the rendered
-PDF pages with every finding's location outlined, the findings list that
-jumps to its box when clicked, the logical structure tree, and a preview of
-the page in the order a screen reader would read it. Nothing leaves the
-machine; the server binds to localhost and stops when the process does.
+A small local server (standard library only) serves one page: drop or choose
+PDFs, and for each the rendered pages with every finding's location outlined,
+the findings list that jumps to its box when clicked, the criteria view, the
+logical structure tree, and a preview of the page in the order a screen
+reader would read it. Files dropped into the page are written to a temporary
+folder that is removed on exit. Nothing leaves the machine; the server binds
+to localhost and stops when the process does.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
+import re
+import shutil
+import tempfile
 import threading
+import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Optional
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from .findings import Result
 from .model import Document
@@ -122,6 +130,7 @@ header{display:flex;align-items:center;gap:1rem;padding:.6rem 1rem;background:#1
 header b{font-size:1rem}header .sub{color:#bbb;font-size:.85rem}
 .verdict{padding:.1rem .5rem;border-radius:.2rem;font-weight:700;letter-spacing:.04em;color:#fff;font-size:.8rem}
 .v-pass{background:var(--pass)}.v-review{background:var(--warn)}.v-fail{background:var(--err)}.v-unreadable{background:#555}
+main[hidden],.drop[hidden]{display:none!important}
 main{flex:1;display:grid;grid-template-columns:380px 1fr 360px;min-height:0}
 @media (max-width:1100px){main{grid-template-columns:320px 1fr}aside.right{display:none}}
 @media (max-width:760px){main{grid-template-columns:1fr;grid-template-rows:40vh 1fr}aside{border-right:0;border-bottom:1px solid var(--rule)}}
@@ -154,6 +163,17 @@ details>summary{cursor:pointer}
 .read p{margin:.2rem 0;padding:.2rem .3rem;border-radius:.2rem;cursor:pointer}.read p:hover{background:#faf8f3}.read p .t{color:var(--accent);font-family:ui-monospace,Menlo,monospace;font-size:.75rem;margin-right:.3rem}
 .read p.art{color:var(--muted);font-style:italic}
 .empty{padding:1rem .75rem;color:var(--muted)}
+header .grow{flex:1}.hbtn{font:inherit;font-size:.8rem;padding:.3rem .7rem;border:1px solid #666;background:#2a2a2a;color:#f5f2ed;border-radius:.2rem;cursor:pointer}.hbtn:hover{border-color:#ccc}
+#docsel{font:inherit;font-size:.85rem;max-width:22rem;background:#2a2a2a;color:#f5f2ed;border:1px solid #666;border-radius:.2rem;padding:.2rem .4rem}
+.drop{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.5rem;padding:2rem;overflow:auto}
+.dz{width:min(640px,100%);border:2px dashed #b9b4aa;border-radius:.4rem;padding:2.5rem 2rem;text-align:center;background:var(--panel);transition:border-color .15s,background .15s}
+.dz.over{border-color:var(--accent);background:#fbf1ea}.dz .big{font-size:1.4rem;margin:0 0 .5rem}.dz .sub{color:var(--muted);margin:.35rem 0}
+.dz .link{font:inherit;color:var(--accent);background:none;border:0;padding:0;cursor:pointer;text-decoration:underline}
+.dz input[type=text]{font:inherit;font-size:.85rem;padding:.3rem .5rem;border:1px solid var(--rule);border-radius:.2rem}
+.dz .hbtn{background:var(--accent);border-color:var(--accent);color:#fff}
+.dz .err{color:var(--err)}
+.doclist{width:min(640px,100%)}.doclist .d{display:flex;gap:.8rem;align-items:center;padding:.5rem .75rem;background:var(--panel);border:1px solid var(--rule);border-radius:.3rem;margin-bottom:.4rem;cursor:pointer}
+.doclist .d:hover{border-color:var(--accent)}.doclist .d .n{flex:1}.doclist .d .s{color:var(--muted);font-size:.8rem}
 .f .fix{display:none;margin-top:.3rem;font-size:.8rem;color:var(--ink)}.f.on .fix{display:block}
 .crit{font-size:.82rem}.crit .sw{display:flex;gap:.4rem;padding:.5rem .75rem;border-bottom:1px solid var(--rule);align-items:center;flex-wrap:wrap}
 .crit .sw button{border:1px solid var(--rule);background:none;padding:.2rem .5rem;border-radius:.2rem;cursor:pointer;font:inherit;font-size:.78rem;color:var(--muted)}
@@ -169,8 +189,19 @@ details>summary{cursor:pointer}
 #critfilter{display:none;padding:.4rem .75rem;background:#fbf1ea;border-bottom:1px solid var(--rule);font-size:.8rem}
 #critfilter button{margin-left:.5rem;font:inherit;font-size:.75rem;cursor:pointer}
 </style>
-<header><b>outloud</b><span id="file" class="sub"></span><span id="verdict" class="verdict"></span><span id="counts" class="sub"></span></header>
-<main>
+<header><b>outloud</b><select id="docsel" hidden aria-label="Checked files"></select><span id="file" class="sub"></span><span id="verdict" class="verdict"></span><span id="counts" class="sub"></span>
+  <span class="grow"></span><button id="openbtn" class="hbtn">Open PDF…</button><input type="file" id="filein" accept="application/pdf,.pdf" multiple hidden></header>
+<div id="drop" class="drop" hidden>
+  <div class="dz" id="dz">
+    <p class="big">Drop a PDF here</p>
+    <p class="sub">or <button class="link" id="pickbtn">choose one from your computer</button>. Several at once is fine.</p>
+    <p class="sub">Or a path on this machine: <input id="pathin" type="text" placeholder="/Users/you/report.pdf" size="40"> <button id="pathbtn" class="hbtn">Check</button></p>
+    <p id="busy" class="sub" hidden>Checking…</p>
+    <p id="derr" class="err" hidden></p>
+  </div>
+  <div id="doclist" class="doclist"></div>
+</div>
+<main id="main" hidden>
 <aside>
   <div class="tabs"><button class="on" data-tab="findings">Findings</button><button data-tab="crit">Criteria</button><button data-tab="tree">Structure</button></div>
   <div id="findings">
@@ -194,14 +225,42 @@ let DATA=null, TF={}, CRIT=null, FW='pdfua1';
 const STL={fail:'fail',warning:'warn',pass:'pass','not-applicable':'n/a',manual:'person','not-tested':'not tested'};
 const OUT={fail:'fail',warning:'warning',pass:'pass',info:'info','not-applicable':'n/a','not-run':'not run'};
 function esc(s){return (s??'').toString().replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
-async function load(){
-  DATA=await (await fetch('/api/data')).json();
-  const r=DATA.result; $('#file').textContent=r.path.split('/').pop()+' · '+DATA.pages.length+' page(s) · '+r.seconds+'s';
+let ID=null;
+function q(u){ return u+(u.includes('?')?'&':'?')+'id='+encodeURIComponent(ID); }
+async function load(id){
+  const url = id ? '/api/data?id='+encodeURIComponent(id) : '/api/data';
+  const d=await (await fetch(url)).json();
+  if(d.empty){ showDrop([]); return; }
+  DATA=d; ID=d.id; TF={}; CRIT=null; $('#critfilter').style.display='none';
+  $('#drop').hidden=true; $('#main').hidden=false;
+  const r=DATA.result; $('#file').textContent=DATA.pages.length+' page(s) · '+r.seconds+'s';
   $('#verdict').textContent=r.verdict.toUpperCase(); $('#verdict').className='verdict v-'+r.verdict;
   $('#counts').textContent=r.counts.error+' error(s), '+r.counts.warning+' warning(s), '+r.counts.info+' info';
-  for(const p of DATA.pages){ TF[p.number]=await (await fetch('/api/transform/'+p.number)).json(); }
+  renderDocsel(d.docs||[]);
+  for(const p of DATA.pages){ TF[p.number]=await (await fetch(q('/api/transform/'+p.number))).json(); }
   renderPages(); renderFindings(); renderTree(); renderRead(); renderCriteria();
 }
+function renderDocsel(docs){ const sel=$('#docsel'); sel.innerHTML=''; for(const d of docs){ const o=document.createElement('option'); o.value=d.id; o.textContent=d.name+' — '+d.verdict.toUpperCase()+' ('+d.errors+'e/'+d.warnings+'w)'; if(d.id===ID) o.selected=true; sel.appendChild(o);} sel.hidden=docs.length<2; }
+function showDrop(docs){ $('#main').hidden=true; $('#drop').hidden=false; $('#file').textContent=''; $('#verdict').textContent=''; $('#verdict').className='verdict'; $('#counts').textContent=''; $('#docsel').hidden=true;
+  const host=$('#doclist'); host.innerHTML=''; if(docs.length){ const h=document.createElement('p'); h.className='sub'; h.textContent='Already checked in this session:'; host.appendChild(h); }
+  for(const d of docs){ const el=document.createElement('div'); el.className='d'; el.innerHTML='<span class="verdict v-'+d.verdict+'">'+d.verdict.toUpperCase()+'</span><span class="n">'+esc(d.name)+'</span><span class="s">'+d.pages+' p · '+d.errors+' error(s), '+d.warnings+' warning(s)</span>'; el.onclick=()=>load(d.id); host.appendChild(el);} }
+async function upload(files){
+  const busy=$('#busy'), err=$('#derr'); err.hidden=true; busy.hidden=false; let last=null;
+  for(const f of files){ busy.textContent='Checking '+f.name+'…';
+    const r=await fetch('/api/upload?name='+encodeURIComponent(f.name),{method:'POST',body:f}); const j=await r.json();
+    if(j.error){ err.textContent=f.name+': '+j.error; err.hidden=false; } else last=j.id; }
+  busy.hidden=true; if(last) load(last); else showDrop((await (await fetch('/api/docs')).json()));
+}
+async function openPath(p){ const busy=$('#busy'), err=$('#derr'); err.hidden=true; busy.hidden=false; busy.textContent='Checking '+p+'…';
+  const r=await fetch('/api/open',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:p})}); const j=await r.json(); busy.hidden=true;
+  if(j.error){ err.textContent=j.error; err.hidden=false; } else load(j.id); }
+$('#openbtn').onclick=()=>$('#filein').click(); $('#pickbtn').onclick=()=>$('#filein').click();
+$('#filein').onchange=e=>{ if(e.target.files.length) upload([...e.target.files]); e.target.value=''; };
+$('#pathbtn').onclick=()=>{ const p=$('#pathin').value.trim(); if(p) openPath(p); }; $('#pathin').onkeydown=e=>{ if(e.key==='Enter') $('#pathbtn').click(); };
+$('#docsel').onchange=e=>load(e.target.value);
+for(const ev of ['dragenter','dragover']) document.addEventListener(ev,e=>{ e.preventDefault(); $('#dz').classList.add('over'); });
+for(const ev of ['dragleave','drop']) document.addEventListener(ev,e=>{ e.preventDefault(); $('#dz').classList.remove('over'); });
+document.addEventListener('drop',e=>{ const fs=[...e.dataTransfer.files].filter(f=>f.name.toLowerCase().endsWith('.pdf')); if(fs.length){ if($('#drop').hidden){ $('#drop').hidden=false; $('#main').hidden=true; } upload(fs); } });
 function px(box){ const m=TF[box.page]; if(!m) return null;
   const pts=[[box.x0,box.y0],[box.x1,box.y0],[box.x0,box.y1],[box.x1,box.y1]].map(([x,y])=>[m[0]*x+m[2]*y+m[4], m[1]*x+m[3]*y+m[5]]);
   const xs=pts.map(p=>p[0]), ys=pts.map(p=>p[1]); const z=2;
@@ -210,7 +269,7 @@ function renderPages(){
   const host=$('#pages'); host.innerHTML='';
   for(const p of DATA.pages){
     const d=document.createElement('div'); d.className='page'; d.id='page-'+p.number; d.style.width=p.width+'px'; d.style.height=p.height+'px';
-    d.innerHTML='<span class="num">page '+p.number+'</span><img loading="lazy" width="'+p.width+'" height="'+p.height+'" src="/page/'+p.number+'.png">';
+    d.innerHTML='<span class="num">page '+p.number+'</span><img loading="lazy" width="'+p.width+'" height="'+p.height+'" src="'+q('/page/'+p.number+'.png')+'">';
     host.appendChild(d);
   }
   for(const f of DATA.findings){ for(const b of (f.boxes||[])){ const r=px(b); if(!r) continue; const el=document.createElement('div'); el.className='box '+f.severity; el.dataset.f=f.id;
@@ -281,13 +340,68 @@ document.querySelectorAll('.tabs button[data-tab]').forEach(b=>b.onclick=()=>{do
 document.querySelectorAll('.crit .sw button[data-fw]').forEach(b=>b.onclick=()=>{document.querySelectorAll('.crit .sw button[data-fw]').forEach(x=>x.classList.toggle('on',x===b)); FW=b.dataset.fw; renderCriteria();});
 $('#crithide').onchange=renderCriteria;
 document.querySelectorAll('[data-sev],#onlyboxed').forEach(c=>c.onchange=renderFindings);
-load();
+load(null);
 </script>"""
 
 
+class Store:
+    """The documents the viewer holds: each checked once, kept open for page renders, closed on exit."""
+
+    def __init__(self):
+        self.docs: dict[str, dict] = {}
+        self.order: list[str] = []
+        self.tmpdir: Optional[str] = None
+        self.lock = threading.Lock()
+
+    def add_path(self, path: str, source: Optional[str] = None, result: Optional[Result] = None) -> str:
+        from . import check  # noqa: PLC0415
+
+        if result is None:
+            result = check(path, source=source)
+        doc = Document(path, source=source) if result.error is None else None
+        did = hashlib.sha1(f"{path}:{time.time_ns()}".encode()).hexdigest()[:10]
+        entry = {"id": did, "path": path, "name": os.path.basename(path), "result": result, "doc": doc,
+                 "data": payload(result, doc) if doc is not None else {"result": {"path": path, "verdict": "unreadable", "error": result.error,
+                                                                                    "counts": {"error": 0, "warning": 0, "info": 0}, "seconds": 0, "stats": {}},
+                                                                         "pages": [], "findings": [], "tree": [], "reading": {}, "criteria": {}, "rules": []}}
+        with self.lock:
+            self.docs[did] = entry
+            self.order.append(did)
+        return did
+
+    def add_bytes(self, name: str, body: bytes) -> str:
+        if self.tmpdir is None:
+            self.tmpdir = tempfile.mkdtemp(prefix="outloud-")
+        safe = re.sub(r"[^A-Za-z0-9._-]+", "_", os.path.basename(name) or "upload.pdf")
+        if not safe.lower().endswith(".pdf"):
+            safe += ".pdf"
+        path = os.path.join(self.tmpdir, f"{len(self.order) + 1:03d}-{safe}")
+        with open(path, "wb") as fh:
+            fh.write(body)
+        return self.add_path(path)
+
+    def listing(self) -> list[dict]:
+        out = []
+        for did in self.order:
+            e = self.docs[did]
+            r = e["result"]
+            out.append({"id": did, "name": e["name"], "verdict": r.verdict, "errors": r.errors, "warnings": r.warnings,
+                        "pages": r.stats.get("pages", 0)})
+        return out
+
+    def close(self):
+        for e in self.docs.values():
+            if e["doc"] is not None:
+                try:
+                    e["doc"].close()
+                except Exception:  # noqa: BLE001
+                    pass
+        if self.tmpdir:
+            shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+
 class _Handler(BaseHTTPRequestHandler):
-    doc: Document = None
-    data: dict = None
+    store: Store = None
 
     def log_message(self, *args):  # quiet
         pass
@@ -300,30 +414,91 @@ class _Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _json(self, obj, status: int = 200):
+        self._send(json.dumps(obj).encode("utf-8"), "application/json", status)
+
+    def _entry(self, query: dict) -> Optional[dict]:
+        did = (query.get("id") or [None])[0]
+        if did is None and self.store.order:
+            did = self.store.order[-1]
+        return self.store.docs.get(did) if did else None
+
     def do_GET(self):  # noqa: N802
-        path = urlparse(self.path).path
+        u = urlparse(self.path)
+        path = u.path
+        query = parse_qs(u.query)
         try:
             if path == "/" or path == "/index.html":
                 self._send(HTML.encode("utf-8"), "text/html; charset=utf-8")
+            elif path == "/api/docs":
+                self._json(self.store.listing())
             elif path == "/api/data":
-                self._send(json.dumps(self.data).encode("utf-8"), "application/json")
+                e = self._entry(query)
+                if e is None:
+                    self._json({"empty": True})
+                else:
+                    self._json(dict(e["data"], id=e["id"], docs=self.store.listing()))
             elif path.startswith("/api/transform/"):
+                e = self._entry(query)
                 n = int(path.rsplit("/", 1)[1])
-                self._send(json.dumps(page_transform(self.doc, n)).encode("utf-8"), "application/json")
+                self._json(page_transform(e["doc"], n))
             elif path.startswith("/page/") and path.endswith(".png"):
+                e = self._entry(query)
                 n = int(path[len("/page/"):-4])
-                self._send(render_page(self.doc, n), "image/png")
+                self._send(render_page(e["doc"], n), "image/png")
             else:
                 self._send(b"not found", "text/plain", 404)
         except Exception as exc:  # noqa: BLE001
             self._send(f"error: {exc}".encode("utf-8"), "text/plain", 500)
 
+    def do_POST(self):  # noqa: N802
+        u = urlparse(self.path)
+        query = parse_qs(u.query)
+        try:
+            if u.path == "/api/upload":
+                # The body is the PDF itself; the name travels in the query string. No multipart
+                # parsing, no size limit beyond what the machine holds.
+                length = int(self.headers.get("Content-Length") or 0)
+                body = self.rfile.read(length) if length else b""
+                if not body.startswith(b"%PDF"):
+                    self._json({"error": "not a PDF file"}, 400)
+                    return
+                name = (query.get("name") or ["upload.pdf"])[0]
+                did = self.store.add_bytes(name, body)
+                self._json({"id": did, "docs": self.store.listing()})
+            elif u.path == "/api/open":
+                # A path on this machine, typed or pasted into the page; the server is local.
+                length = int(self.headers.get("Content-Length") or 0)
+                p = json.loads(self.rfile.read(length) or b"{}").get("path", "").strip()
+                if not p or not os.path.isfile(p):
+                    self._json({"error": "no such file"}, 400)
+                    return
+                did = self.store.add_path(p)
+                self._json({"id": did, "docs": self.store.listing()})
+            else:
+                self._send(b"not found", "text/plain", 404)
+        except Exception as exc:  # noqa: BLE001
+            self._json({"error": str(exc)}, 500)
 
-def serve(result: Result, doc: Document, port: int = 0, open_browser: bool = True) -> Optional[str]:
-    """Serve the viewer for one checked document until interrupted. Returns the URL."""
-    handler = type("Handler", (_Handler,), {"doc": doc, "data": payload(result, doc)})
+
+def serve(results: list = (), docs: list = (), port: int = 0, open_browser: bool = True, block: bool = True):
+    """Serve the viewer until interrupted. `results` and `docs` are parallel lists of what the CLI
+    already checked; both may be empty, in which case the page opens with a drop zone. Returns
+    the URL (and the server, when `block` is False, for tests)."""
+    store = Store()
+    for r, d in zip(results, docs):
+        store.add_path(r.path, result=r)
+        entry = store.docs[store.order[-1]]
+        if entry["doc"] is not None and d is not None:
+            entry["doc"].close()
+            entry["doc"] = d
+            entry["data"] = payload(r, d)
+    handler = type("Handler", (_Handler,), {"store": store})
     httpd = ThreadingHTTPServer(("127.0.0.1", port), handler)
     url = f"http://127.0.0.1:{httpd.server_address[1]}/"
+    if not block:
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        return url, httpd, store
     if open_browser:
         threading.Timer(0.3, lambda: webbrowser.open(url)).start()
     else:
@@ -334,4 +509,5 @@ def serve(result: Result, doc: Document, port: int = 0, open_browser: bool = Tru
         pass
     finally:
         httpd.server_close()
+        store.close()
     return url

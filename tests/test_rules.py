@@ -540,3 +540,43 @@ def test_json_and_sarif_carry_criteria(tmp):
     assert sarif["runs"][0]["taxonomies"][0]["name"] == "WCAG 2.2"
     fig = next(x for x in sarif["runs"][0]["tool"]["driver"]["rules"] if x["id"] == "FIG-001")
     assert fig["properties"]["wcag"] == ["1.1.1"] and fig["relationships"]
+
+
+# ── the viewer app: upload, open by path, switch ───────────────────────
+
+def test_viewer_app_endpoints(tmp):
+    import json
+    import urllib.request
+    from outloud.viewer import serve
+
+    fig = str(tmp / "app_fig.pdf")
+    Fixture().figure(alt=None).build(fig)
+    clean_path = str(tmp / "app_clean.pdf")
+    clean().build(clean_path)
+    url, httpd, store = serve([], [], port=0, open_browser=False, block=False)
+    try:
+        empty = json.loads(urllib.request.urlopen(url + "api/data").read())
+        assert empty.get("empty") is True
+        req = urllib.request.Request(url + "api/upload?name=app_fig.pdf", data=open(fig, "rb").read(), method="POST")
+        up = json.loads(urllib.request.urlopen(req).read())
+        assert up["id"] and up["docs"][0]["verdict"] == "fail"
+        req = urllib.request.Request(url + "api/open", data=json.dumps({"path": clean_path}).encode(), method="POST",
+                                     headers={"Content-Type": "application/json"})
+        op = json.loads(urllib.request.urlopen(req).read())
+        assert len(op["docs"]) == 2 and op["docs"][1]["verdict"] == "pass"
+        data = json.loads(urllib.request.urlopen(url + "api/data?id=" + up["id"]).read())
+        assert data["id"] == up["id"] and any(f["rule"] == "FIG-001" for f in data["findings"]) and data["criteria"]["wcag22"]
+        png = urllib.request.urlopen(url + "page/1.png?id=" + up["id"]).read()
+        assert png[:8] == b"\x89PNG\r\n\x1a\n"
+        bad = urllib.request.Request(url + "api/upload?name=x.pdf", data=b"not a pdf", method="POST")
+        try:
+            urllib.request.urlopen(bad)
+            assert False, "expected 400"
+        except urllib.error.HTTPError as e:
+            assert e.code == 400
+        assert store.tmpdir and os.path.isdir(store.tmpdir)
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        store.close()
+    assert not os.path.isdir(store.tmpdir)

@@ -50,7 +50,7 @@ def _expand(paths: tuple[str, ...]) -> list[str]:
 @click.option("--no-info", is_flag=True, help="Hide info-level findings on the terminal.")
 @click.option("--criteria", is_flag=True,
               help="Print the criteria view: every Matterhorn checkpoint and WCAG 2.2 A/AA success criterion with its status (pass, fail, warning, not applicable, needs a person) and the rules behind it.")
-@click.option("--view", is_flag=True, help="Open the result in the browser: pages with findings outlined, the structure tree, and a screen-reader preview. One file at a time.")
+@click.option("--view", is_flag=True, help="Open the app in the browser: drop or choose PDFs, or pass them here; pages with findings outlined, criteria, structure tree and a screen-reader preview.")
 @click.option("--port", type=int, default=0, help="Port for --view (default: any free port).")
 @click.option("--no-browser", is_flag=True, help="With --view: serve without opening a browser window; print the URL instead.")
 @click.option("--list-rules", is_flag=True, help="Print the rule catalogue and exit.")
@@ -61,8 +61,8 @@ def main(paths, source, json_path, sarif_path, html_path, only, skip, layer, fai
         click.echo(rules_table())
         return
     files = _expand(paths)
-    if not files:
-        raise click.UsageError("give at least one PDF file or directory, or --list-rules")
+    if not files and not view:
+        raise click.UsageError("give at least one PDF file or directory, or --list-rules, or --view to open the app")
     only_ids = {x.strip() for item in only for x in item.split(",") if x.strip()} or None
     skip_ids = {x.strip() for item in skip for x in item.split(",") if x.strip()} or None
     results: list[Result] = []
@@ -100,19 +100,17 @@ def main(paths, source, json_path, sarif_path, html_path, only, skip, layer, fai
         with open(html_path, "w", encoding="utf-8") as fh:
             fh.write(to_html(results))
     if view:
-        if len(files) != 1:
-            raise click.UsageError("--view takes exactly one file")
-        if results[0].error:
-            raise click.UsageError(f"cannot view: {results[0].error}")
         from .model import Document  # noqa: PLC0415
         from .viewer import serve  # noqa: PLC0415
 
-        doc = Document(files[0], source=source)
+        ok = [r for r in results if not r.error]
+        docs = [Document(r.path, source=source) for r in ok]
         click.echo("viewer running; press Ctrl+C to stop", err=True)
         try:
-            serve(results[0], doc, port=port, open_browser=not no_browser)
+            serve(ok, docs, port=port, open_browser=not no_browser)
         finally:
-            doc.close()
+            for d in docs:
+                d.close()
     code = 0
     if any(r.error for r in results):
         code = 2

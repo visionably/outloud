@@ -86,13 +86,16 @@ for f in result.sorted_findings():
     print(f.rule, f.page, f.message)
 ```
 
-## See where the problems are
+## The app
 
 ```bash
-outloud report.pdf --view
+outloud --view                 # opens the app in your browser, empty
+outloud report.pdf --view      # opens it with that file already checked
 ```
 
-opens the result in your browser: every page rendered with each finding's location outlined, a findings list that jumps to the outline when clicked (with the fix under each finding), the criteria tab with the PDF/UA-1 and WCAG 2.2 views, the logical structure tree (click an element to see where it sits on the page), and a preview of each page in the order a screen reader following the structure would read it, with artifacts shown separately as what a reader skips. It is the views PAC gives, served from a small local server that binds to localhost and stops with Ctrl+C (`--no-browser` prints the URL instead of opening a window). Nothing leaves the machine and nothing is installed beyond the package itself.
+Drop PDFs onto the page, choose them with a file picker, or type a path on your machine; several at once is fine. Each is checked as it arrives and the header switches between them. For every file: each page rendered with every finding's location outlined, a findings list that jumps to the outline when clicked with the fix under each finding, the criteria tab with the PDF/UA-1 and WCAG 2.2 views, the logical structure tree (click an element to see where it sits on the page), and a preview of each page in the order a screen reader following the structure would read it, with artifacts shown separately as what a reader skips. It is the views PAC gives, without Windows.
+
+It is a small local server from the standard library. It binds to localhost, keeps dropped files in a temporary folder it removes on exit, and stops with Ctrl+C (`--no-browser` prints the URL instead of opening a window). Nothing leaves the machine and nothing is installed beyond the package itself.
 
 The same boxes are in the JSON and SARIF output (`boxes`, in PDF user space with a page number), so other tools can highlight them too.
 
