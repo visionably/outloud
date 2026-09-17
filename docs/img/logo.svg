@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 120" role="img" aria-label="outloud">
+  <g fill="none" stroke="#c25c29" stroke-width="7" stroke-linecap="round">
+    <path d="M62 38a30 30 0 0 1 0 44"/><path d="M78 24a52 52 0 0 1 0 72"/>
+  </g>
+  <path d="M18 48h16l20-16v56L34 72H18z" fill="#c25c29"/>
+  <text x="118" y="80" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="64" font-weight="700" letter-spacing="-2" fill="#8a877f">out<tspan fill="#c25c29">loud</tspan></text>
+</svg>

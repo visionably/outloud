@@ -20,7 +20,7 @@ Reading their code changed outloud. These came straight from it:
 
 ## What outloud has that pdfa11y does not
 
-- **The semantic layer**: 39 rules that no validator runs, on what a conformant file still gets wrong (silent header cells, shredded headers, alternative text that hides a sentence, prose tagged as a formula, pages painted out of tag order, running heads tagged as content, titles that are file names). pdfa11y checks that keys exist; outloud also reads what they say against what the page paints.
+- **The semantic layer**: 35 rules that no validator runs, on what a conformant file still gets wrong (silent header cells, shredded headers, alternative text that hides a sentence, prose tagged as a formula, pages painted out of tag order, running heads tagged as content, titles that are file names). pdfa11y checks that keys exist; outloud also reads what they say against what the page paints.
 - **Word-level text**: outloud merges glyph-per-operator text into words and lines, normalises ligatures, and inserts spaces for kerning gaps, so rules can find a word in a file written by Chrome, Word or TeX. pdfa11y decodes glyphs through ToUnicode for its checks but has no word model.
 - **Locations you can see**: findings carry bounding boxes and the viewer outlines them on the rendered page. pdfa11y gives a page number and a structure path.
 - **Criteria roll-up**: pass, fail, warning, not applicable or needs-a-person per Matterhorn checkpoint and per WCAG 2.2 success criterion, on the terminal, in JSON and HTML, and in the viewer.

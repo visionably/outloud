@@ -1,0 +1,25 @@
+name: tests
+on:
+  push: { branches: [main] }
+  pull_request:
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "${{ matrix.python }}" }
+      - name: Fonts for the fixture builder
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y fonts-dejavu-core
+      - run: pip install -e ".[dev]"
+      - run: python -m pytest -q
+      - name: The demo file fails the way the README says
+        run: |
+          python scripts/make_demo.py
+          outloud examples/demo.pdf --criteria --fail-on never

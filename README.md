@@ -1,119 +1,149 @@
-# outloud
+<p align="center">
+  <img src="docs/img/logo.svg" alt="outloud" width="360">
+</p>
 
-What a PDF says out loud. A fast, scriptable accessibility checker for the terminal: it tests PDF/UA-1 conformance the way veraPDF and PAC do, maps every rule to WCAG 2.2, and then asks the questions a validator cannot: do the tags match what the page paints, and are the words a screen reader is given the words a person would use.
+<h3 align="center">What a PDF says out loud.</h3>
 
-Runs on macOS, Linux and Windows. One command, one file or a thousand, results as text, JSON, SARIF or HTML.
+<p align="center">
+  The PDF accessibility checker that runs anywhere: PDF/UA-1 and WCAG 2.2, in your terminal, your CI and your browser.<br>
+  It finds what validators find, and then what they cannot.
+</p>
 
-```
-$ outloud report.pdf
-REVIEW     report.pdf: 0 error(s), 6 warning(s), 0 info  [31 page(s), 2.94s]
-  WARNING TBL-011   p.28   6 data cell(s) are associated only with empty header cells
-          Data cells are headed only by silence — semantic check, no validator tests this · WCAG 1.3.1
-          fix: Put the heading text in the TH cells, or point /Headers at the cells that carry it.
-  PDF/UA-1 checkpoints: 16 pass · 12 not applicable · 3 need a person
-  WCAG 2.2 A/AA:        1 warning · 10 pass · 27 not applicable · 17 need a person
-```
+<p align="center">
+  <a href="https://github.com/visionably/outloud/actions/workflows/ci.yml"><img src="https://github.com/visionably/outloud/actions/workflows/ci.yml/badge.svg" alt="tests"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="Apache 2.0"></a>
+  <img src="https://img.shields.io/badge/python-3.10%2B-blue.svg" alt="Python 3.10+">
+  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg" alt="macOS, Linux, Windows">
+  <img src="https://img.shields.io/badge/rules-90-c25c29.svg" alt="90 rules">
+  <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-2c6e49.svg" alt="PRs welcome"></a>
+</p>
 
-That file passes veraPDF. Its appendix table has header cells with nothing in them, so a screen reader announces every value in it against silence. outloud exists for findings like that one.
-
-## Install
-
-```bash
-pipx install outloud        # or: uv tool install outloud
-outloud --version
-```
-
-From a clone:
+<p align="center">
+  <img src="docs/img/app-findings.png" alt="The outloud app: a findings list on the left, the PDF page in the middle with every finding outlined in red or amber, and on the right the page as a screen reader would read it" width="100%">
+</p>
 
 ```bash
-uv venv .venv && uv pip install -e ".[dev]"
-.venv/bin/outloud --list-rules
+uv tool install git+https://github.com/visionably/outloud    # or: pipx install git+https://github.com/visionably/outloud
+outloud report.pdf            # check it
+outloud --view                # or open the app and drop files in
 ```
 
-Python 3.10 or later. No Java, no GUI, no Windows-only anything.
+No Java. No Windows. No upload. Nothing leaves your machine.
+
+---
+
+## Why
+
+The standard tools for checking a PDF's accessibility are **PAC**, which is a Windows desktop program, and **veraPDF**, which is a Java validator built for conformance labs. If you are on a Mac, in a CI pipeline, or just want an answer in two seconds, there has been nothing.
+
+And both of them test whether the *keys exist*. A figure has alternative text: pass. A table has header cells: pass. They cannot tell you that the alternative text is `IMG_2041.jpg`, that the header cells are empty, or that a sentence on the page is marked as decoration so every screen reader skips it.
+
+This is a published, professionally remediated report. **veraPDF passes it.** Its appendix table has header cells with nothing in them, so a screen reader announces every value in it against silence:
+
+<p align="center">
+  <img src="docs/img/app-real.png" alt="A real 31-page report open in outloud at page 28. One warning, TBL-011: six data cells are associated only with empty header cells. The cells are outlined on the page, and the finding shows its fix." width="100%">
+</p>
+
+outloud exists for findings like that one.
+
+## What you get
+
+**Two layers, kept apart.**
+*Conformance* rules test a requirement of ISO 14289-1 (PDF/UA-1), the same ones veraPDF and PAC test, and are calibrated to agree with veraPDF: on 58 one-defect fixtures and 102 real files, they agree on all 160.
+*Semantic* rules test what a conformant file still gets wrong: words printed on the page that no tag announces, prose marked as an artifact, header cells that are empty or shredded one word per row, alternative text that is a file name or LaTeX source, a "formula" that swallowed a sentence, a page painted in a different order from its tags, a title that is the file name. Each names its evidence so a person can judge. No validator runs these.
+
+**Every finding tells you what to do.** Page, evidence, the ISO clause and Matterhorn checkpoint it rests on, the WCAG 2.2 criteria it affects, and a one-line fix.
+
+<p align="center">
+  <img src="docs/img/terminal.png" alt="Terminal output of outloud on the demo file: four errors and several warnings, each with evidence, the clause and WCAG criteria, and a green fix line; then one-line summaries for PDF/UA-1 checkpoints and WCAG 2.2" width="92%">
+</p>
+
+**Pass and fail by criterion, like PAC's two tabs.** Every checkpoint of the Matterhorn Protocol 1.1 (31) and every WCAG 2.2 success criterion at A and AA (55), each with one of five honest statuses: **fail**, **warning**, **pass**, **not applicable** (no forms in this file, so nothing to label) and **needs a person**, with a sentence on what to look at. A file without tables does not "pass" the table rules.
+
+<p align="center">
+  <img src="docs/img/app-criteria.png" alt="The criteria tab of the app showing WCAG 2.2: 1.1.1, 1.3.1 and 1.3.2 fail with the rule ids behind them, then criteria that need a person with a note on what to check" width="100%">
+</p>
+
+**See where.** Findings carry bounding boxes. The app outlines them on the rendered page, shows the structure tree (click an element to see where it sits), and reads each page back in the order a screen reader would, with artifacts shown as what a reader skips.
+
+**Built for pipelines.** Exit codes, JSON, SARIF 2.1.0 for GitHub code scanning (with the fix as help text and a WCAG taxonomy), and a single-file HTML report.
 
 ## Use
 
 ```bash
-outloud file.pdf                         # findings on the terminal, exit 1 if any error
-outloud a.pdf b.pdf reports/             # several files; directories are searched
-outloud out.pdf --source in.pdf          # also compare a remediated file with its source
+outloud file.pdf                          # findings on the terminal, exit 1 if any error
+outloud a.pdf b.pdf reports/              # several files; directories are searched
+outloud file.pdf --criteria               # add the PDF/UA-1 and WCAG 2.2 tables
+outloud out.pdf --source in.pdf           # also compare a remediated file with its original
 outloud *.pdf --json r.json --sarif r.sarif --html r.html
-outloud file.pdf --layer conformance     # only the rules a validator would run
-outloud file.pdf --only TBL-011,TAG-003  # or --skip
+outloud file.pdf --layer conformance      # only what a validator would run
+outloud file.pdf --only TBL-011,TAG-003   # or --skip
 outloud --list-rules
 ```
 
-Verdicts: **pass** (nothing at error or warning level), **review** (warnings only), **fail** (at least one error), **unreadable**. `--fail-on warning` makes warnings fail the exit status; `--fail-on never` reports without failing, for dashboards.
+Verdicts: **pass**, **review** (warnings only), **fail** (at least one error), **unreadable**. `--fail-on warning` makes warnings fail the exit status; `--fail-on never` reports without failing.
 
-Every finding ends with a one-line **fix**: what to change, for the person who has to. SARIF output plugs into GitHub code scanning and most CI systems, with the fix as the rule's help text and every rule related to its WCAG 2.2 criteria through a taxonomy. The HTML report is a single self-contained file.
-
-## Pass and fail by criterion
+Try it on the bundled example, one page with nine different defects:
 
 ```bash
-outloud report.pdf --criteria
+outloud examples/demo.pdf --view
 ```
 
-adds the two views PAC gives: every checkpoint of the **Matterhorn Protocol 1.1** (the 31 checkpoints that organise PDF/UA-1) and every **WCAG 2.2 success criterion at levels A and AA** (all 55), each with a status and the rules behind it.
+### The app
 
-```
-PDF/UA-1 · Matterhorn Protocol 1.1 checkpoints — 16 pass · 12 not applicable · 3 need a person
-  PASS    01 Real content tagged          9 rules pass
-  PASS    02 Role mapping                 TAG-010, TAG-011, TAG-012 pass
-  N/A     03 Flickering
-  PERSON  04 Color and contrast           Check that colour is not the only carrier of meaning ...
-  ...
-  PASS    15 Tables                       TBL-001, TBL-002, TBL-003, TBL-004, TBL-005 pass   [beyond the protocol: TBL-011 warning]
-
-WCAG 2.2, levels A and AA — 1 warning · 10 pass · 27 not applicable · 17 need a person
-  PASS    1.1.1   Non-text Content (A)  9 rules pass · MATH-001, MATH-010, MATH-011 n/a
-  WARN    1.3.1   Info and Relationships (A)  TBL-011 warning · 44 rules pass · 9 rules n/a
-  PERSON  1.4.3   Contrast (Minimum) (AA)  Text needs 4.5:1 contrast against its background ...
-  N/A     3.3.2   Labels or Instructions (A)  FRM-001, FRM-002 n/a
+```bash
+outloud --view                 # opens empty: drop PDFs in, pick them, or type a path
+outloud report.pdf --view      # opens with that file already checked
 ```
 
-Five statuses, and the list is honest about all of them. **Fail** and **warning** come from the rules. **Pass** means every rule mapped to the criterion ran and found nothing. **Not applicable** means the file has nothing the criterion is about: no form fields, so nothing to label; no media, so nothing can flicker. Rules are marked not applicable the same way (`requires` in the catalogue), so a file without tables passes no table rule and fails none. **Need a person** names what a person still has to look at, with a sentence on what. For the PDF/UA view, a checkpoint's status comes from the conformance rules, as a validator would count it; the semantic rules mapped to the same checkpoint are shown beside it as *beyond the protocol*. For WCAG they count in full, because 1.1.1 asks whether the alternative is equivalent, not whether the key exists.
+<p align="center">
+  <img src="docs/img/app-drop.png" alt="The empty app: a drop zone that says Drop a PDF here, a link to choose a file, and a box for a path on this machine" width="80%">
+</p>
 
-The same tables are in the JSON (`criteria`), the HTML report, and the viewer's **Criteria** tab, where clicking a criterion filters the findings to the rules behind it.
+A small local server from the Python standard library. It binds to localhost, keeps dropped files in a temporary folder it removes on exit, and stops with Ctrl+C. Deep links work: `?doc=report&tab=crit&fw=wcag22&f=TBL-011`.
 
-Library use:
+### In CI
+
+```yaml
+- run: pipx install git+https://github.com/visionably/outloud
+- run: outloud dist/*.pdf --sarif outloud.sarif
+- uses: github/codeql-action/upload-sarif@v3
+  if: always()
+  with: { sarif_file: outloud.sarif }
+```
+
+### As a library
 
 ```python
 from outloud import check
+
 result = check("report.pdf")
 print(result.verdict, result.errors, result.warnings)
 for f in result.sorted_findings():
-    print(f.rule, f.page, f.message)
+    print(f.rule, f.page, f.message, f.boxes)
+for row in result.criteria["wcag22"]:
+    print(row["id"], row["name"], row["status"])
 ```
-
-## The app
-
-```bash
-outloud --view                 # opens the app in your browser, empty
-outloud report.pdf --view      # opens it with that file already checked
-```
-
-Drop PDFs onto the page, choose them with a file picker, or type a path on your machine; several at once is fine. Each is checked as it arrives and the header switches between them. For every file: each page rendered with every finding's location outlined, a findings list that jumps to the outline when clicked with the fix under each finding, the criteria tab with the PDF/UA-1 and WCAG 2.2 views, the logical structure tree (click an element to see where it sits on the page), and a preview of each page in the order a screen reader following the structure would read it, with artifacts shown separately as what a reader skips. It is the views PAC gives, without Windows.
-
-It is a small local server from the standard library. It binds to localhost, keeps dropped files in a temporary folder it removes on exit, and stops with Ctrl+C (`--no-browser` prints the URL instead of opening a window). Nothing leaves the machine and nothing is installed beyond the package itself.
-
-The same boxes are in the JSON and SARIF output (`boxes`, in PDF user space with a page number), so other tools can highlight them too.
-
-## What it checks
-
-Every rule is data in [`src/outloud/rules/catalogue.yaml`](src/outloud/rules/catalogue.yaml) and documented in [`docs/RULES.md`](docs/RULES.md), generated from it. Each rule states its claim in plain words, the ISO 14289-1 clause and Matterhorn Protocol checkpoint it rests on, the WCAG 2.2 success criteria it tests, the document feature it needs to apply, which layer it belongs to, and what to change.
-
-**Conformance rules** test a requirement of PDF/UA-1: the document is tagged, titled and identified; every glyph maps to a character and every font is embedded; headings do not skip levels; tables have headers with scope; lists, notes, links, forms and formulae are built the way the standard says. These are the rules veraPDF and PAC run, and on them outloud is calibrated to agree with veraPDF.
-
-**Semantic rules** test what a conformant file can still get wrong. Words printed on the page that no structure element announces. Prose marked as an artifact so readers skip it. Header cells that are empty, or shredded one word per row. Alternative text that is a file name, a caption repeated, or LaTeX source. A formula that hides a sentence. A page that paints its content in a different order from the tag tree, so Preview, Chrome and copy-paste read it differently from a screen reader. A title that is the file name. Each finding names its evidence so a person can judge it; none of them are tested by any validator.
-
-With `--source`, three more rules compare a remediated file with its original: structure lost, text lost, pages that no longer look the same.
-
-90 rules in the catalogue; 88 implemented; 2 planned and reported as "not run" so the gap is visible.
 
 ## How it compares
 
-Measured on 17 September 2026 on the same machine: veraPDF 1.26.5 (`--flavour ua1`) and outloud timed per file including each tool's start-up; [pdfa11y](https://github.com/speedata/pdfa11y) (speedata's Go checker, built from its 25 July 2026 source) timed as one process over the corpus, which is how it is meant to run.
+| | **outloud** | PAC | veraPDF | pdfa11y |
+|---|---|---|---|---|
+| Runs on macOS and Linux | ✅ | ❌ Windows only | ✅ needs a JVM | ✅ |
+| Command line, exit codes, CI | ✅ | ❌ | ✅ | ✅ |
+| PDF/UA-1 conformance | ✅ calibrated to veraPDF | ✅ | ✅ reference | ✅ subset |
+| PDF/UA-2 | ❌ not yet | ✅ | ✅ | ✅ |
+| Per-criterion view, PDF/UA and WCAG | ✅ | ✅ | ❌ | ❌ |
+| Not-applicable and needs-a-person statuses | ✅ | partly | ❌ | ✅ per check |
+| Semantic checks (tags match the page, words make sense) | ✅ 35 rules | ❌ | ❌ | ❌ |
+| Findings outlined on the page | ✅ | ✅ | ❌ | ❌ |
+| Screen-reader preview, structure tree | ✅ | ✅ | ❌ | ❌ |
+| A fix on every finding | ✅ | ❌ | ❌ | ✅ |
+| JSON, SARIF, HTML | ✅ | PDF report | JSON, XML, HTML | JSON, HTML, PDF |
+| Compare a remediated file with its source | ✅ | ❌ | ❌ | ❌ |
+| Licence | Apache 2.0 | proprietary, free | GPL / MPL | MIT |
+
+Measured on 17 September 2026 on one machine: veraPDF 1.26.5 (`--flavour ua1`) and outloud timed per file including start-up; [pdfa11y](https://github.com/speedata/pdfa11y) (built from its 25 July 2026 source) timed as one process per corpus, which is how it is meant to run.
 
 | Corpus | Files | outloud agrees with veraPDF | pdfa11y agrees with veraPDF | veraPDF | outloud | pdfa11y |
 |---|---|---|---|---|---|---|
@@ -123,36 +153,57 @@ Measured on 17 September 2026 on the same machine: veraPDF 1.26.5 (`--flavour ua
 | Production corpus, originals | 23 | 23 of 23 | 23 | 20.9 s | 9.8 s | 1.2 s |
 | Production corpus, remediated | 21 | 21 of 21 | 1 | 20.2 s | 9.5 s | 0.4 s |
 
-On the 21 remediated production files that veraPDF calls compliant, outloud's semantic layer still reports something on 9: silent header cells, shredded headers, actual text that does not match the glyphs, pages painted out of reading order. Those are the findings the tool is for.
+On the 21 remediated production files that veraPDF calls compliant, outloud's semantic layer still reports something on 9. Those are the findings the tool is for.
 
-pdfa11y fails every remediated file in both corpora. Its XMP reader is a regular expression that does not match a `pdfuaid:part` element carrying its own namespace declaration, which is valid RDF and what our pipeline writes; it also keys fonts by name, so two subset fonts with the same name are checked against each other's Unicode maps. Neither is a defect in the files. On the fixtures it misses a remapped standard type, a shared marked-content id and a CID font without a glyph map, and it reports a non-embedded font as a warning where the standard says shall. It is a well-built tool, and reading its code gave outloud the not-applicable outcome, the fix line on every rule and five conformance rules; the full account, disagreement by disagreement, is in [`docs/COMPARISON-pdfa11y.md`](docs/COMPARISON-pdfa11y.md).
+Speed is honest rather than headline: 2 to 10 times faster than veraPDF, mostly because there is no JVM to start, and 5 to 20 times slower than pdfa11y, because the walker is Python and every glyph costs a loop iteration. A compiled core is planned once the rule set settles. pdfa11y is a well-built tool and reading its code made outloud better; where the two disagree, and who we think is right, is written up rule by rule in [`docs/COMPARISON-pdfa11y.md`](docs/COMPARISON-pdfa11y.md). Run the comparisons on your own files with [`scripts/compare_verapdf.py`](scripts/compare_verapdf.py) and [`scripts/compare_pdfa11y.py`](scripts/compare_pdfa11y.py).
 
-Speed is honest rather than headline. outloud is 2 to 10 times faster than veraPDF, mostly because it has no JVM to start, and 5 to 20 times slower than pdfa11y, because the walker is Python and every glyph costs a loop iteration. A 31-page report checks in about three seconds; a 101-page journal article in under two. A compiled core is the plan once the rule set settles.
+## The rules
 
-Agreement is measured on the rules both tools have. Eight of outloud's conformance rules test requirements veraPDF's profile does not (marked `verapdf: no` in the catalogue); the comparison script reports those separately rather than counting them against either tool. The scripts are [`scripts/compare_verapdf.py`](scripts/compare_verapdf.py) and [`scripts/compare_pdfa11y.py`](scripts/compare_pdfa11y.py); run them on your own files.
+90 rules, 88 implemented, 2 planned and reported as "not run" so the gap is visible. Every rule is data in [`catalogue.yaml`](src/outloud/rules/catalogue.yaml) and documented in [`docs/RULES.md`](docs/RULES.md), which is generated from it, along with an index by Matterhorn checkpoint and by WCAG criterion.
+
+| Group | Examples |
+|---|---|
+| Document | tagged, titled, language, PDF/UA identifier, permissions, optional content, XFA |
+| Tagging | untagged content, real content artifacted, role map, shared or dangling marked content, alternative text that hides content |
+| Text and fonts | embedding, Unicode mapping, `.notdef`, invisible text, mappings that are legal but wrong |
+| Headings | skipped levels, first heading, mixed forms, a heading that is a salutation or a paragraph |
+| Tables | headers, scope, nesting, irregular grids, shredded headers, silent headers, a drawn grid nobody tagged |
+| Lists, figures, links, forms, notes, math | structure and naming, placeholder alt text, unlinked URLs, field names that are internal ids, LaTeX as alt text |
+| Reading order, navigation, pagination | paint order against tag order, bookmarks on long files, running heads tagged as content |
+| Source comparison | structure, text and appearance lost between an original and its remediated copy |
 
 ## How it works
 
-`model.py` reads the file once with pikepdf and resolves what is easy to get wrong: role-mapped types, inherited page references, marked-content references inside form XObjects, attributes by owner, fonts with their Unicode mapping and embedding status. `content.py` walks each page's content stream and records every painted text run with its characters, position and marked-content tag, walking form XObjects in place. Glyph-by-glyph text operators are merged into words and lines, TJ kerning gaps become spaces, and ligatures are normalised, because otherwise no rule can find a word in a file written by Chrome, Word or TeX. Rules read that model and nothing else.
+`model.py` reads the file once with pikepdf and resolves what is easy to get wrong: role-mapped types, inherited page references, marked content inside form XObjects, attributes by owner, fonts with their Unicode mapping. `content.py` walks each page's content stream and records every painted text run with its characters, position and tag. Glyph-by-glyph text operators are merged into words and lines, kerning gaps become spaces, ligatures are normalised, because otherwise no rule can find a word in a file written by Chrome, Word or TeX. Rules read that model and nothing else, and the registry works out once per file which rules apply.
 
-## Fixtures and tests
-
-`tests/builder.py` constructs small tagged PDFs from nothing: a subset TrueType font with a ToUnicode CMap, marked content, a structure tree with a parent tree, XMP with `dc:title` and `pdfuaid:part`. Every negative test bends exactly one thing in a clean baseline and asserts that one rule fires. `scripts/make_fixtures.py` writes the same fixtures to `fixtures/` so you can open them, or run veraPDF on them.
+Fixtures are built from nothing by [`tests/builder.py`](tests/builder.py): a subset TrueType font with a ToUnicode map, marked content, a structure tree with a parent tree, XMP. Every negative test bends exactly one thing in a clean baseline and asserts that one rule fires.
 
 ```bash
-.venv/bin/python -m pytest
+.venv/bin/python -m pytest              # 84 tests
 .venv/bin/python scripts/make_fixtures.py
-.venv/bin/python scripts/gen_rules_doc.py
+.venv/bin/python scripts/make_screenshots.py    # regenerates the pictures on this page
 ```
 
 ## What it is not
 
-It is an evaluation, not a certification, and not legal advice. Semantic rules are heuristics with thresholds; they name what they saw and can be wrong about what it means. The Matterhorn failure-condition ids are not yet verified against the protocol text, so the catalogue cites checkpoints only. A "pass" on a WCAG criterion means the automated rules mapped to it found nothing, not that the criterion is met; the criteria that need a person say so. It does not measure colour contrast, and it does not yet check heading levels beyond H6 or cross-page reading order (planned rules HDG-004, ORD-002). It tests PDF/UA-1 only; PDF/UA-2 files are checked against the UA-1 rules.
+An evaluation, not a certification, and not legal advice. Semantic rules are heuristics; they name what they saw and can be wrong about what it means. A "pass" on a WCAG criterion means the automated rules mapped to it found nothing, not that the criterion is met; the criteria that need a person say so. It does not measure colour contrast yet, tests PDF/UA-1 only, and the Matterhorn failure-condition ids are not yet verified against the protocol text, so the catalogue cites checkpoints.
+
+## Roadmap
+
+- [ ] PyPI release (`pipx install outloud`)
+- [ ] Colour contrast (WCAG 1.4.3, 1.4.11)
+- [ ] PDF/UA-2
+- [ ] Per-element language (3.1.2)
+- [ ] A compiled core for the content walker
+- [ ] A GitHub Action
+- [ ] Heading levels beyond H6, cross-page reading order
 
 ## Contributing
 
-A rule is a catalogue entry plus a function plus a fixture. Add the entry to `catalogue.yaml` (id, claim, layer, clause, matterhorn, wcag, requires, severity, fix), register the function with `@rule("ID")` in the right module under `src/outloud/rules/`, add a case to `tests/test_rules.py` and `scripts/make_fixtures.py`, and run the comparison scripts against veraPDF and pdfa11y on the new fixture. If the tools disagree, say which is right and why in the catalogue entry.
+The most useful thing you can send is a PDF that outloud gets wrong. A rule is a catalogue entry, a function and a fixture; [`CONTRIBUTING.md`](CONTRIBUTING.md) has the five-minute version.
+
+If outloud found something in your files that a validator passed, a star helps other people find it.
 
 ## Licence
 
-Apache 2.0. Built by [Visionably](https://visionably.ai) and released so that checking a PDF for accessibility costs nothing and runs anywhere.
+Apache 2.0. Built by [Visionably](https://visionably.ai/research/outloud) and released so that checking a PDF for accessibility costs nothing and runs anywhere.

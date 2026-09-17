@@ -225,7 +225,7 @@ let DATA=null, TF={}, CRIT=null, FW='pdfua1';
 const STL={fail:'fail',warning:'warn',pass:'pass','not-applicable':'n/a',manual:'person','not-tested':'not tested'};
 const OUT={fail:'fail',warning:'warning',pass:'pass',info:'info','not-applicable':'n/a','not-run':'not run'};
 function esc(s){return (s??'').toString().replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
-let ID=null;
+let ID=null; const P=new URLSearchParams(location.search); const EAGER=P.has('eager');
 function q(u){ return u+(u.includes('?')?'&':'?')+'id='+encodeURIComponent(ID); }
 async function load(id){
   const url = id ? '/api/data?id='+encodeURIComponent(id) : '/api/data';
@@ -238,8 +238,13 @@ async function load(id){
   $('#counts').textContent=r.counts.error+' error(s), '+r.counts.warning+' warning(s), '+r.counts.info+' info';
   renderDocsel(d.docs||[]);
   for(const p of DATA.pages){ TF[p.number]=await (await fetch(q('/api/transform/'+p.number))).json(); }
-  renderPages(); renderFindings(); renderTree(); renderRead(); renderCriteria();
+  renderPages(); renderFindings(); renderTree(); renderRead(); renderCriteria(); applyParams();
 }
+// Deep links: ?doc=<part of a file name>&tab=findings|crit|tree&fw=pdfua1|wcag22&f=<rule id>. Applied once, on first load.
+function applyParams(){ if(applyParams.done) return; applyParams.done=true;
+  const fw=P.get('fw'); if(fw) document.querySelector('.crit .sw button[data-fw="'+fw+'"]')?.click();
+  const tab=P.get('tab'); if(tab) document.querySelector('.tabs button[data-tab="'+tab+'"]')?.click();
+  const f=P.get('f'); if(f){ const hit=DATA.findings.find(x=>x.rule===f&&x.boxes&&x.boxes.length)||DATA.findings.find(x=>x.rule===f); if(hit) setTimeout(()=>select(hit), EAGER?50:400); } }
 function renderDocsel(docs){ const sel=$('#docsel'); sel.innerHTML=''; for(const d of docs){ const o=document.createElement('option'); o.value=d.id; o.textContent=d.name+' — '+d.verdict.toUpperCase()+' ('+d.errors+'e/'+d.warnings+'w)'; if(d.id===ID) o.selected=true; sel.appendChild(o);} sel.hidden=docs.length<2; }
 function showDrop(docs){ $('#main').hidden=true; $('#drop').hidden=false; $('#file').textContent=''; $('#verdict').textContent=''; $('#verdict').className='verdict'; $('#counts').textContent=''; $('#docsel').hidden=true;
   const host=$('#doclist'); host.innerHTML=''; if(docs.length){ const h=document.createElement('p'); h.className='sub'; h.textContent='Already checked in this session:'; host.appendChild(h); }
@@ -269,7 +274,7 @@ function renderPages(){
   const host=$('#pages'); host.innerHTML='';
   for(const p of DATA.pages){
     const d=document.createElement('div'); d.className='page'; d.id='page-'+p.number; d.style.width=p.width+'px'; d.style.height=p.height+'px';
-    d.innerHTML='<span class="num">page '+p.number+'</span><img loading="lazy" width="'+p.width+'" height="'+p.height+'" src="'+q('/page/'+p.number+'.png')+'">';
+    d.innerHTML='<span class="num">page '+p.number+'</span><img loading="'+(EAGER?'eager':'lazy')+'" width="'+p.width+'" height="'+p.height+'" src="'+q('/page/'+p.number+'.png')+'">';
     host.appendChild(d);
   }
   for(const f of DATA.findings){ for(const b of (f.boxes||[])){ const r=px(b); if(!r) continue; const el=document.createElement('div'); el.className='box '+f.severity; el.dataset.f=f.id;
@@ -290,7 +295,7 @@ function select(f){
   document.querySelectorAll('.f.on,.box.on').forEach(e=>e.classList.remove('on'));
   document.querySelectorAll('.f[data-f="'+f.id+'"]').forEach(e=>e.classList.add('on'));
   const boxes=document.querySelectorAll('.box[data-f="'+f.id+'"]'); boxes.forEach(e=>e.classList.add('on'));
-  const target=boxes[0]||(f.page?$('#page-'+f.page):null); if(target) target.scrollIntoView({behavior:'smooth',block:'center'});
+  const target=boxes[0]||(f.page?$('#page-'+f.page):null); if(target) target.scrollIntoView({behavior:EAGER?'auto':'smooth',block:'center'});
 }
 function renderTree(){
   const host=$('#tree'); host.innerHTML='';
@@ -326,7 +331,8 @@ function renderCriteria(){
   const hide=$('#crithide').checked;
   for(const r of rows){ if(hide&&r.status==='not-applicable') continue;
     const d=document.createElement('div'); d.className='row'+(CRIT&&CRIT.id===r.id&&CRIT.fw===FW?' on':'');
-    const rules=(r.rules||[]).map(x=>x.id+' '+OUT[x.outcome]).join(' · ');
+    const grp={}; for(const x of (r.rules||[])) (grp[x.outcome]=grp[x.outcome]||[]).push(x.id);
+    const rules=['fail','warning','info','pass','not-applicable','not-run'].filter(o=>grp[o]).map(o=>(['fail','warning','info'].includes(o)||grp[o].length<=4)?grp[o].join(', ')+' '+OUT[o]:grp[o].length+' rules '+OUT[o]).join(' · ');
     const beyond=(r.semantic||[]).filter(x=>x.outcome==='fail'||x.outcome==='warning').map(x=>x.id+' '+OUT[x.outcome]).join(' · ');
     d.innerHTML='<span class="st st-'+r.status+'">'+STL[r.status]+'</span><div><div class="nm">'+esc(r.id)+' '+esc(r.name)+(r.level?' <span class="lv">('+r.level+')</span>':'')+'</div>'
       +(rules?'<div class="rl">'+esc(rules)+'</div>':'')+(beyond?'<div class="beyond">beyond the protocol: '+esc(beyond)+'</div>':'')+(r.note?'<div class="note">'+esc(r.note)+'</div>':'')+'</div>';
@@ -340,7 +346,9 @@ document.querySelectorAll('.tabs button[data-tab]').forEach(b=>b.onclick=()=>{do
 document.querySelectorAll('.crit .sw button[data-fw]').forEach(b=>b.onclick=()=>{document.querySelectorAll('.crit .sw button[data-fw]').forEach(x=>x.classList.toggle('on',x===b)); FW=b.dataset.fw; renderCriteria();});
 $('#crithide').onchange=renderCriteria;
 document.querySelectorAll('[data-sev],#onlyboxed').forEach(c=>c.onchange=renderFindings);
-load(null);
+(async()=>{ let id=P.get('id'); const want=P.get('doc');
+  if(!id&&want){ const docs=await (await fetch('/api/docs')).json(); const hit=docs.find(d=>d.name.toLowerCase().includes(want.toLowerCase())); if(hit) id=hit.id; }
+  load(id); })();
 </script>"""
 
 
