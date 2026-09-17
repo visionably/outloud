@@ -1,0 +1,26 @@
+name: publish
+# Publishes to PyPI when a GitHub release is published. No token: PyPI trusts this
+# workflow in this repository (Trusted Publishing, OpenID Connect).
+on:
+  release: { types: [published] }
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+      - run: sudo apt-get update && sudo apt-get install -y fonts-dejavu-core
+      - run: pip install build && pip install -e ".[dev]" && python -m pytest -q
+      - run: python -m build
+      - uses: actions/upload-artifact@v4
+        with: { name: dist, path: dist/ }
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions: { id-token: write }
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: dist, path: dist/ }
+      - uses: pypa/gh-action-pypi-publish@release/v1

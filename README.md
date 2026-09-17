@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/img/logo.svg" alt="outloud" width="360">
+  <img src="https://raw.githubusercontent.com/visionably/outloud/main/docs/img/logo.svg" alt="outloud" width="360">
 </p>
 
 <h3 align="center">What a PDF says out loud.</h3>
@@ -11,19 +11,19 @@
 
 <p align="center">
   <a href="https://github.com/visionably/outloud/actions/workflows/ci.yml"><img src="https://github.com/visionably/outloud/actions/workflows/ci.yml/badge.svg" alt="tests"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="Apache 2.0"></a>
+  <a href="https://github.com/visionably/outloud/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="Apache 2.0"></a>
   <img src="https://img.shields.io/badge/python-3.10%2B-blue.svg" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg" alt="macOS, Linux, Windows">
   <img src="https://img.shields.io/badge/rules-90-c25c29.svg" alt="90 rules">
-  <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-2c6e49.svg" alt="PRs welcome"></a>
+  <a href="https://github.com/visionably/outloud/blob/main/CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-2c6e49.svg" alt="PRs welcome"></a>
 </p>
 
 <p align="center">
-  <img src="docs/img/app-findings.png" alt="The outloud app: a findings list on the left, the PDF page in the middle with every finding outlined in red or amber, and on the right the page as a screen reader would read it" width="100%">
+  <img src="https://raw.githubusercontent.com/visionably/outloud/main/docs/img/app-findings.png" alt="The outloud app: a findings list on the left, the PDF page in the middle with every finding outlined in red or amber, and on the right the page as a screen reader would read it" width="100%">
 </p>
 
 ```bash
-uv tool install git+https://github.com/visionably/outloud    # or: pipx install git+https://github.com/visionably/outloud
+pipx install outloud          # or: uv tool install outloud
 outloud report.pdf            # check it
 outloud --view                # or open the app and drop files in
 ```
@@ -41,7 +41,7 @@ And both of them test whether the *keys exist*. A figure has alternative text: p
 This is a published, professionally remediated report. **veraPDF passes it.** Its appendix table has header cells with nothing in them, so a screen reader announces every value in it against silence:
 
 <p align="center">
-  <img src="docs/img/app-real.png" alt="A real 31-page report open in outloud at page 28. One warning, TBL-011: six data cells are associated only with empty header cells. The cells are outlined on the page, and the finding shows its fix." width="100%">
+  <img src="https://raw.githubusercontent.com/visionably/outloud/main/docs/img/app-real.png" alt="A real 31-page report open in outloud at page 28. One warning, TBL-011: six data cells are associated only with empty header cells. The cells are outlined on the page, and the finding shows its fix." width="100%">
 </p>
 
 outloud exists for findings like that one.
@@ -55,13 +55,13 @@ outloud exists for findings like that one.
 **Every finding tells you what to do.** Page, evidence, the ISO clause and Matterhorn checkpoint it rests on, the WCAG 2.2 criteria it affects, and a one-line fix.
 
 <p align="center">
-  <img src="docs/img/terminal.png" alt="Terminal output of outloud on the demo file: four errors and several warnings, each with evidence, the clause and WCAG criteria, and a green fix line; then one-line summaries for PDF/UA-1 checkpoints and WCAG 2.2" width="92%">
+  <img src="https://raw.githubusercontent.com/visionably/outloud/main/docs/img/terminal.png" alt="Terminal output of outloud on the demo file: four errors and several warnings, each with evidence, the clause and WCAG criteria, and a green fix line; then one-line summaries for PDF/UA-1 checkpoints and WCAG 2.2" width="92%">
 </p>
 
 **Pass and fail by criterion, like PAC's two tabs.** Every checkpoint of the Matterhorn Protocol 1.1 (31) and every WCAG 2.2 success criterion at A and AA (55), each with one of five honest statuses: **fail**, **warning**, **pass**, **not applicable** (no forms in this file, so nothing to label) and **needs a person**, with a sentence on what to look at. A file without tables does not "pass" the table rules.
 
 <p align="center">
-  <img src="docs/img/app-criteria.png" alt="The criteria tab of the app showing WCAG 2.2: 1.1.1, 1.3.1 and 1.3.2 fail with the rule ids behind them, then criteria that need a person with a note on what to check" width="100%">
+  <img src="https://raw.githubusercontent.com/visionably/outloud/main/docs/img/app-criteria.png" alt="The criteria tab of the app showing WCAG 2.2: 1.1.1, 1.3.1 and 1.3.2 fail with the rule ids behind them, then criteria that need a person with a note on what to check" width="100%">
 </p>
 
 **See where.** Findings carry bounding boxes. The app outlines them on the rendered page, shows the structure tree (click an element to see where it sits), and reads each page back in the order a screen reader would, with artifacts shown as what a reader skips.
@@ -97,7 +97,7 @@ outloud report.pdf --view      # opens with that file already checked
 ```
 
 <p align="center">
-  <img src="docs/img/app-drop.png" alt="The empty app: a drop zone that says Drop a PDF here, a link to choose a file, and a box for a path on this machine" width="80%">
+  <img src="https://raw.githubusercontent.com/visionably/outloud/main/docs/img/app-drop.png" alt="The empty app: a drop zone that says Drop a PDF here, a link to choose a file, and a box for a path on this machine" width="80%">
 </p>
 
 A small local server from the Python standard library. It binds to localhost, keeps dropped files in a temporary folder it removes on exit, and stops with Ctrl+C. Deep links work: `?doc=report&tab=crit&fw=wcag22&f=TBL-011`.
@@ -105,7 +105,7 @@ A small local server from the Python standard library. It binds to localhost, ke
 ### In CI
 
 ```yaml
-- run: pipx install git+https://github.com/visionably/outloud
+- run: pipx install outloud
 - run: outloud dist/*.pdf --sarif outloud.sarif
 - uses: github/codeql-action/upload-sarif@v3
   if: always()
@@ -155,11 +155,11 @@ Measured on 17 September 2026 on one machine: veraPDF 1.26.5 (`--flavour ua1`) a
 
 On the 21 remediated production files that veraPDF calls compliant, outloud's semantic layer still reports something on 9. Those are the findings the tool is for.
 
-Speed is honest rather than headline: 2 to 10 times faster than veraPDF, mostly because there is no JVM to start, and 5 to 20 times slower than pdfa11y, because the walker is Python and every glyph costs a loop iteration. A compiled core is planned once the rule set settles. pdfa11y is a well-built tool and reading its code made outloud better; where the two disagree, and who we think is right, is written up rule by rule in [`docs/COMPARISON-pdfa11y.md`](docs/COMPARISON-pdfa11y.md). Run the comparisons on your own files with [`scripts/compare_verapdf.py`](scripts/compare_verapdf.py) and [`scripts/compare_pdfa11y.py`](scripts/compare_pdfa11y.py).
+Speed is honest rather than headline: 2 to 10 times faster than veraPDF, mostly because there is no JVM to start, and 5 to 20 times slower than pdfa11y, because the walker is Python and every glyph costs a loop iteration. A compiled core is planned once the rule set settles. pdfa11y is a well-built tool and reading its code made outloud better; where the two disagree, and who we think is right, is written up rule by rule in [`docs/COMPARISON-pdfa11y.md`](https://github.com/visionably/outloud/blob/main/docs/COMPARISON-pdfa11y.md). Run the comparisons on your own files with [`scripts/compare_verapdf.py`](https://github.com/visionably/outloud/blob/main/scripts/compare_verapdf.py) and [`scripts/compare_pdfa11y.py`](https://github.com/visionably/outloud/blob/main/scripts/compare_pdfa11y.py).
 
 ## The rules
 
-90 rules, 88 implemented, 2 planned and reported as "not run" so the gap is visible. Every rule is data in [`catalogue.yaml`](src/outloud/rules/catalogue.yaml) and documented in [`docs/RULES.md`](docs/RULES.md), which is generated from it, along with an index by Matterhorn checkpoint and by WCAG criterion.
+90 rules, 88 implemented, 2 planned and reported as "not run" so the gap is visible. Every rule is data in [`catalogue.yaml`](https://github.com/visionably/outloud/blob/main/src/outloud/rules/catalogue.yaml) and documented in [`docs/RULES.md`](https://github.com/visionably/outloud/blob/main/docs/RULES.md), which is generated from it, along with an index by Matterhorn checkpoint and by WCAG criterion.
 
 | Group | Examples |
 |---|---|
@@ -176,7 +176,7 @@ Speed is honest rather than headline: 2 to 10 times faster than veraPDF, mostly 
 
 `model.py` reads the file once with pikepdf and resolves what is easy to get wrong: role-mapped types, inherited page references, marked content inside form XObjects, attributes by owner, fonts with their Unicode mapping. `content.py` walks each page's content stream and records every painted text run with its characters, position and tag. Glyph-by-glyph text operators are merged into words and lines, kerning gaps become spaces, ligatures are normalised, because otherwise no rule can find a word in a file written by Chrome, Word or TeX. Rules read that model and nothing else, and the registry works out once per file which rules apply.
 
-Fixtures are built from nothing by [`tests/builder.py`](tests/builder.py): a subset TrueType font with a ToUnicode map, marked content, a structure tree with a parent tree, XMP. Every negative test bends exactly one thing in a clean baseline and asserts that one rule fires.
+Fixtures are built from nothing by [`tests/builder.py`](https://github.com/visionably/outloud/blob/main/tests/builder.py): a subset TrueType font with a ToUnicode map, marked content, a structure tree with a parent tree, XMP. Every negative test bends exactly one thing in a clean baseline and asserts that one rule fires.
 
 ```bash
 .venv/bin/python -m pytest              # 84 tests
@@ -190,7 +190,6 @@ An evaluation, not a certification, and not legal advice. Semantic rules are heu
 
 ## Roadmap
 
-- [ ] PyPI release (`pipx install outloud`)
 - [ ] Colour contrast (WCAG 1.4.3, 1.4.11)
 - [ ] PDF/UA-2
 - [ ] Per-element language (3.1.2)
@@ -200,7 +199,7 @@ An evaluation, not a certification, and not legal advice. Semantic rules are heu
 
 ## Contributing
 
-The most useful thing you can send is a PDF that outloud gets wrong. A rule is a catalogue entry, a function and a fixture; [`CONTRIBUTING.md`](CONTRIBUTING.md) has the five-minute version.
+The most useful thing you can send is a PDF that outloud gets wrong. A rule is a catalogue entry, a function and a fixture; [`CONTRIBUTING.md`](https://github.com/visionably/outloud/blob/main/CONTRIBUTING.md) has the five-minute version.
 
 If outloud found something in your files that a validator passed, a star helps other people find it.
 
