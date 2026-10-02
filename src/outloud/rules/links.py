@@ -18,7 +18,11 @@ def _annot_boxes(annots, limit: int = 40) -> list[dict]:
     return out
 
 
-_INTERNAL_ID = re.compile(r"^(text|check|check ?box|signature|button|radio|combo|list|field|date|fill|name|untitled)[ _\-]?\d*$", re.I)
+# Generated field ids: Acrobat's "Text1", "Check Box3", "Untitled". "Date", "Name" and
+# "Signature" are also the right label for many fields, so on their own they are names;
+# only a generated number after them ("Date1", "Name_2") marks an id.
+_INTERNAL_ID = re.compile(r"^(?:(?:text|check|check ?box|button|radio|combo|list|field|fill|untitled)[ _\-]?\d*"
+                          r"|(?:date|name|signature)[ _\-]?\d+)$", re.I)
 
 
 @rule("LNK-001")

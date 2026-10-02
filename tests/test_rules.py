@@ -132,6 +132,40 @@ def test_tag_003_silent_words_via_actualtext(tmp):
     assert "TAG-003" in rules_hit(r) or "TAG-032" in rules_hit(r)
 
 
+def _walker_rewrites(monkeypatch, rewrite):
+    """Make the content walker read each run as `rewrite(text)` (None drops the run), while
+    MuPDF still reads the page as written: two decoders disagreeing about the same glyphs."""
+    from outloud import content
+
+    original = content.parse_page
+
+    def parse_page(doc, page):
+        pc = original(doc, page)
+        kept = []
+        for r in pc.runs:
+            t = rewrite(r.text)
+            if t is not None:
+                r.text = t
+                kept.append(r)
+        pc.runs = kept
+        return pc
+
+    monkeypatch.setattr(content, "parse_page", parse_page)
+
+
+def test_tag_003_ignores_decoding_disagreement(tmp, monkeypatch):
+    # A bullet whose /ToUnicode reads "Bul let": MuPDF takes it literally, the walker reads "•".
+    _walker_rewrites(monkeypatch, lambda t: "•" if t.startswith("Bullet") else t)
+    fx = clean().p("Bullet marker beside several ordinary paragraph words")
+    assert "TAG-003" not in rules_hit(run(fx, tmp, "tag003b"))
+
+
+def test_tag_003_words_the_walker_never_saw(tmp, monkeypatch):
+    _walker_rewrites(monkeypatch, lambda t: None if t.startswith("Hidden") else t)
+    fx = clean().p("Hidden sentence whose glyphs nobody walked over at all")
+    assert_hits(run(fx, tmp, "tag003c"), "TAG-003")
+
+
 def test_tag_010_unmapped_type(tmp):
     assert_hits(run(clean().add(Block("P", "Custom element", type_raw="Fancy")), tmp, "tag010"), "TAG-010")
 
@@ -187,6 +221,21 @@ def test_txt_002_no_tounicode(tmp):
 
 def test_txt_004_collisions(tmp):
     assert_hits(run(Fixture(tounicode_collide=True).p("Every letter maps to the same character."), tmp, "txt004"), "TXT-004")
+
+
+def test_txt_004_ligatures_are_not_collisions(tmp):
+    # Five ligature glyphs and a plain f: every mapping starts with "f", none is wrong.
+    fx = Fixture(tounicode_map={"A": "ff", "B": "fi", "C": "fl", "D": "ffi", "E": "ffl"}).p("ABCDE of fine text")
+    assert "TXT-004" not in rules_hit(run(fx, tmp, "txt004b"))
+
+
+def test_frm_002_internal_id_pattern():
+    from outloud.rules.links import _INTERNAL_ID
+
+    for tu in ("Text1", "Check Box3", "Untitled", "Date1", "Name_2", "Signature 4", "field"):
+        assert _INTERNAL_ID.match(tu), tu
+    for tu in ("Date", "Name", "Signature", "Date of birth", "Full name"):
+        assert not _INTERNAL_ID.match(tu), tu
 
 
 def test_txt_010_invisible_text(tmp):

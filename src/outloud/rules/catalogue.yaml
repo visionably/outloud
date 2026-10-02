@@ -195,7 +195,7 @@ tagging:
     fix: Move the text out of the artifact into a structure element (P, H, LI) so it is read.
   - id: TAG-003
     title: Words the page prints that no element announces
-    claim: Text visible on the page appears in no structure element's content, alternative text or actual text; whatever the reason, the reader never hears it.
+    claim: Text a renderer finds on the page sits where the content walker painted no glyphs and appears in no structure element's content, alternative text or actual text; whatever the reason, the reader never hears it. Words the two decoders merely read differently (a ligature, a bullet whose /ToUnicode spells a name) are not reported.
     layer: semantic
     matterhorn: "01"
     wcag: ["1.3.1"]
@@ -353,7 +353,7 @@ text:
     fix: Extend the /ToUnicode CMap to cover every code the page shows; the evidence lists the first codes.
   - id: TXT-004
     title: Unicode mapping is legal but wrong
-    claim: The /ToUnicode CMap maps many glyphs to the same character, to control characters, or to the private-use area, so the extracted text is not the text on the page.
+    claim: The /ToUnicode CMap maps many glyphs to the same text (a ligature mapping to "fi" or "ffl" is not the same as "f"), to control characters, or to the private-use area, so the extracted text is not the text on the page.
     layer: semantic
     matterhorn: "10"
     wcag: ["1.3.1"]
@@ -779,7 +779,7 @@ forms:
     fix: Add a Form structure element at the field's place in the reading order with an OBJR to the widget.
   - id: FRM-002
     title: Field name is the internal id
-    claim: /TU is "Text1", "Signature2" or another generated id; a reader hears the id instead of what the field is for.
+    claim: /TU is "Text1", "Signature2" or another generated id ("Date" or "Name" alone is a label, not an id); a reader hears the id instead of what the field is for.
     layer: semantic
     matterhorn: "28"
     wcag: ["3.3.2", "4.1.2"]

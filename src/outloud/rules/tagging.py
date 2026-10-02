@@ -14,6 +14,10 @@ try:  # PyMuPDF's flag constants; the fallback values are the documented ones
     import pymupdf as _fitz
     _TEXT_FLAGS = _fitz.TEXT_PRESERVE_LIGATURES | _fitz.TEXT_PRESERVE_WHITESPACE | _fitz.TEXT_MEDIABOX_CLIP
 except Exception:  # noqa: BLE001
+    try:
+        import fitz as _fitz  # noqa: PLC0415
+    except Exception:  # noqa: BLE001
+        _fitz = None
     _TEXT_FLAGS = 1 | 2 | 64
 
 _DENSE_PATHS = 1000   # painted paths per page above which MuPDF text extraction is skipped
@@ -43,6 +47,13 @@ def furniture_keys(doc: Document) -> set[str]:
 
 def _blob(texts) -> str:
     return re.sub(r"\s+", "", norm(" ".join(texts)).lower())
+
+
+def _covered(bbox: tuple, painted: list[tuple], slack: float = 2.0) -> bool:
+    """True if the centre of `bbox` lies in one of the `painted` boxes (widened by `slack` points,
+    since the walker's boxes come from font widths and are not exact)."""
+    cx, cy = (bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2
+    return any(p[0] - slack <= cx <= p[2] + slack and p[1] - slack <= cy <= p[3] + slack for p in painted)
 
 
 @rule("TAG-001")
@@ -120,44 +131,38 @@ def silent_words(doc: Document):
         pc = doc.content(page.index)
         announced = _blob([r.text for r in pc.runs if r.tagged and not r.artifact] + alt_by_page.get(page.index, []))
         elsewhere = _blob([r.text for r in pc.runs if not r.tagged or r.artifact])   # TAG-001 / TAG-002 territory
-        lines = []
-        inv = None
         if len(pc.paths) > _DENSE_PATHS:
             # MuPDF's text device slows to seconds on a page with thousands of vector paths (a
             # chart drawn stroke by stroke): 12 s for one page of a 101-page file. The walker
-            # already has every painted run of such a page, so use its lines, in PDF space.
-            lines = [(ln.text, ln.bbox) for ln in pc.lines]
-        else:
-            try:
-                fpage = fz[page.index]
-                inv = ~fpage.transformation_matrix
-                for blk in fpage.get_text("dict", flags=_TEXT_FLAGS).get("blocks", []):
-                    for ln in blk.get("lines", []):
-                        lines.append(("".join(sp.get("text", "") for sp in ln.get("spans", [])), ln.get("bbox")))
-            except Exception:  # noqa: BLE001
-                continue
+            # already has every painted run of such a page, so every word it could report is
+            # in `announced` or `elsewhere` by construction.
+            continue
+        # MuPDF's words, grouped into its lines, each word with its box in PDF user space.
+        lines: dict[tuple, list[tuple[str, tuple]]] = {}
+        try:
+            fpage = fz[page.index]
+            inv = ~fpage.transformation_matrix
+            for x0, y0, x1, y1, text, blk, ln, _ in fpage.get_text("words", flags=_TEXT_FLAGS):
+                r = _fitz.Rect(x0, y0, x1, y1) * inv
+                lines.setdefault((blk, ln), []).append((text, (min(r.x0, r.x1), min(r.y0, r.y1), max(r.x0, r.x1), max(r.y0, r.y1))))
+        except Exception:  # noqa: BLE001
+            continue
+        painted = [r.bbox for r in pc.runs if r.text.strip()]
         missing: list[str] = []
         missing_boxes: list[dict] = []
-        for line, lb in lines:
-            if line_key(line) in furniture:
+        for line_words in lines.values():
+            if line_key(" ".join(t for t, _ in line_words)) in furniture:
                 continue
-            found_here = False
-            for w in words(line):
-                lw = w.lower()
-                if len(lw) < 3 or lw in announced or lw in elsewhere:
+            for text, wb in line_words:
+                new = [w for w in words(text) if len(w) >= 3 and w.lower() not in announced and w.lower() not in elsewhere]
+                # MuPDF and the walker can decode the same glyphs differently (a bullet whose
+                # /ToUnicode says "Bul let", a ligature, a Type3 glyph). Where the walker painted
+                # a run over the word, that run's tagging is already known and TAG-001 or
+                # TAG-002 speak for it; only a word the walker never saw painted is silent.
+                if not new or _covered(wb, painted):
                     continue
-                missing.append(w)
-                found_here = True
-            if found_here and lb:
-                if inv is None:
-                    b = box(page.index, lb)
-                else:
-                    try:
-                        import pymupdf as _fz  # noqa: PLC0415
-                    except ImportError:  # pragma: no cover
-                        import fitz as _fz  # noqa: PLC0415
-                    r = _fz.Rect(lb) * inv
-                    b = box(page.index, (min(r.x0, r.x1), min(r.y0, r.y1), max(r.x0, r.x1), max(r.y0, r.y1)))
+                missing.extend(new)
+                b = box(page.index, wb)
                 if b:
                     missing_boxes.append(b)
         if len(missing) >= 3:

@@ -77,17 +77,19 @@ def mapping_quality(doc: Document):
     for f in doc.fonts.values():
         if not f.has_tounicode or not f.codes_shown:
             continue
-        shown = {c: ord(u[0]) for c, u in f.cmap.items() if c in f.codes_shown and u}
+        # Compare whole mapped strings: a ligature maps one code to "ff", "fi" or "ffl", which
+        # shares its first letter with "f" but is a different, correct mapping.
+        shown = {c: u for c, u in f.cmap.items() if c in f.codes_shown and u}
         if len(shown) < 4:
             continue
-        targets = collections.Counter(u for u in shown.values() if u != 32)
+        targets = collections.Counter(u for u in shown.values() if u.strip())
         collisions = [(u, n) for u, n in targets.items() if n >= 5]
-        control = [c for c, u in shown.items() if u < 32 and u not in (9, 10, 13)]
-        pua = [c for c, u in shown.items() if 0xE000 <= u <= 0xF8FF]
+        control = [c for c, u in shown.items() if ord(u[0]) < 32 and ord(u[0]) not in (9, 10, 13)]
+        pua = [c for c, u in shown.items() if 0xE000 <= ord(u[0]) <= 0xF8FF]
         problems = []
         if collisions:
             u, n = max(collisions, key=lambda x: x[1])
-            problems.append(f"{n} different codes all map to U+{u:04X} {chr(u)!r}")
+            problems.append(f"{n} different codes all map to {' '.join(f'U+{ord(ch):04X}' for ch in u)} {u!r}")
         if control:
             problems.append(f"{len(control)} code(s) map to control characters")
         if pua:
