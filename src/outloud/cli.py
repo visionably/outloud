@@ -22,6 +22,19 @@ from .findings import Result
 from .report import batch_table, criteria_table, one_line, rules_table, terminal, to_html, to_json, to_sarif
 
 
+def _utf8_streams() -> None:
+    """Write the report as UTF-8 whatever the locale says. Evidence quotes page text, which
+    carries ligatures, minus signs, private-use bullets and the U+FFFD that decoding a broken
+    /ToUnicode produces; under cp1252 one such character raised UnicodeEncodeError and lost
+    the whole report, with the same exit status as a failing file. errors="replace" keeps a
+    stream that cannot be reconfigured from doing the same."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError, OSError):   # not a TextIOWrapper (a test runner's buffer, a pipe already written)
+            pass
+
+
 def _expand(paths: tuple[str, ...]) -> list[str]:
     out: list[str] = []
     for p in paths:
@@ -57,6 +70,7 @@ def _expand(paths: tuple[str, ...]) -> list[str]:
 @click.version_option(__version__, prog_name="outloud")
 def main(paths, source, json_path, sarif_path, html_path, only, skip, layer, fail_on, quiet, no_info, criteria, view, port, no_browser, list_rules):
     """Check PDF files for accessibility: PDF/UA-1 conformance plus semantic checks a validator cannot make."""
+    _utf8_streams()
     if list_rules:
         click.echo(rules_table())
         return
