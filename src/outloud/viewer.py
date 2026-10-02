@@ -186,6 +186,8 @@ header .grow{flex:1}.hbtn{font:inherit;font-size:.8rem;padding:.3rem .7rem;borde
 .crit .nm{font-weight:600}.crit .lv{color:var(--muted);font-weight:400}.crit .rl{color:var(--muted);font-family:ui-monospace,Menlo,monospace;font-size:.74rem;margin-top:.15rem}
 .crit .note{color:var(--muted);font-size:.76rem;margin-top:.15rem}
 .crit .beyond{color:var(--warn);font-size:.74rem;margin-top:.15rem}
+[role=button]:focus-visible,.tabs button:focus-visible,.crit .sw button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.read p.on{background:#fbf1ea}.crit .row.inert{cursor:default}.crit .row.inert:hover{background:none}
 #critfilter{display:none;padding:.4rem .75rem;background:#fbf1ea;border-bottom:1px solid var(--rule);font-size:.8rem}
 #critfilter button{margin-left:.5rem;font:inherit;font-size:.75rem;cursor:pointer}
 </style>
@@ -225,6 +227,10 @@ let DATA=null, TF={}, CRIT=null, FW='pdfua1';
 const STL={fail:'fail',warning:'warn',pass:'pass','not-applicable':'n/a',manual:'person','not-tested':'not tested'};
 const OUT={fail:'fail',warning:'warning',pass:'pass',info:'info','not-applicable':'n/a','not-run':'not run'};
 function esc(s){return (s??'').toString().replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+// A row that acts on click: give it the focus, role and keys a <button> would have (the rows hold block layout a <button> cannot).
+function act(el,fn,pressed){ el.tabIndex=0; el.setAttribute('role','button'); if(pressed!==undefined) el.setAttribute('aria-pressed',pressed?'true':'false');
+  el.onclick=fn; el.onkeydown=e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); e.stopPropagation(); fn(e); } }; }
+function press(sel,on){ document.querySelectorAll(sel).forEach(e=>{ e.classList.toggle('on',on(e)); if(e.hasAttribute('aria-pressed')) e.setAttribute('aria-pressed',on(e)?'true':'false'); }); }
 let ID=null; const P=new URLSearchParams(location.search); const EAGER=P.has('eager');
 function q(u){ return u+(u.includes('?')?'&':'?')+'id='+encodeURIComponent(ID); }
 async function load(id){
@@ -248,7 +254,7 @@ function applyParams(){ if(applyParams.done) return; applyParams.done=true;
 function renderDocsel(docs){ const sel=$('#docsel'); sel.innerHTML=''; for(const d of docs){ const o=document.createElement('option'); o.value=d.id; o.textContent=d.name+' — '+d.verdict.toUpperCase()+' ('+d.errors+'e/'+d.warnings+'w)'; if(d.id===ID) o.selected=true; sel.appendChild(o);} sel.hidden=docs.length<2; }
 function showDrop(docs){ $('#main').hidden=true; $('#drop').hidden=false; $('#file').textContent=''; $('#verdict').textContent=''; $('#verdict').className='verdict'; $('#counts').textContent=''; $('#docsel').hidden=true;
   const host=$('#doclist'); host.innerHTML=''; if(docs.length){ const h=document.createElement('p'); h.className='sub'; h.textContent='Already checked in this session:'; host.appendChild(h); }
-  for(const d of docs){ const el=document.createElement('div'); el.className='d'; el.innerHTML='<span class="verdict v-'+d.verdict+'">'+d.verdict.toUpperCase()+'</span><span class="n">'+esc(d.name)+'</span><span class="s">'+d.pages+' p · '+d.errors+' error(s), '+d.warnings+' warning(s)</span>'; el.onclick=()=>load(d.id); host.appendChild(el);} }
+  for(const d of docs){ const el=document.createElement('div'); el.className='d'; el.innerHTML='<span class="verdict v-'+d.verdict+'">'+d.verdict.toUpperCase()+'</span><span class="n">'+esc(d.name)+'</span><span class="s">'+d.pages+' p · '+d.errors+' error(s), '+d.warnings+' warning(s)</span>'; act(el,()=>load(d.id)); host.appendChild(el);} }
 async function upload(files){
   const busy=$('#busy'), err=$('#derr'); err.hidden=true; busy.hidden=false; let last=null;
   for(const f of files){ busy.textContent='Checking '+f.name+'…';
@@ -290,10 +296,10 @@ function renderFindings(){
       +'<div class="msg">'+esc(f.message)+'</div>'+(f.evidence?'<div class="ev">'+esc(f.evidence)+'</div>':'')
       +'<div class="claim"><b>'+esc(f.title)+'</b>'+(f.clause?' · ISO 14289-1 '+esc(f.clause):' · semantic check')+(f.wcag&&f.wcag.length?' · WCAG '+esc(f.wcag.join(', ')):'')+'<br>'+esc(f.claim)+'</div>'
       +(f.fix?'<div class="fix"><b>Fix:</b> '+esc(f.fix)+'</div>':'');
-    d.onclick=()=>select(f); host.appendChild(d);} }
+    act(d,()=>select(f),false); host.appendChild(d);} }
 function select(f){
-  document.querySelectorAll('.f.on,.box.on').forEach(e=>e.classList.remove('on'));
-  document.querySelectorAll('.f[data-f="'+f.id+'"]').forEach(e=>e.classList.add('on'));
+  document.querySelectorAll('.box.on').forEach(e=>e.classList.remove('on'));
+  press('.f',e=>e.dataset.f===String(f.id));
   const boxes=document.querySelectorAll('.box[data-f="'+f.id+'"]'); boxes.forEach(e=>e.classList.add('on'));
   const target=boxes[0]||(f.page?$('#page-'+f.page):null); if(target) target.scrollIntoView({behavior:EAGER?'auto':'smooth',block:'center'});
 }
@@ -302,13 +308,13 @@ function renderTree(){
   if(!DATA.tree.length){host.innerHTML='<div class="empty">No structure tree.</div>';return;}
   const build=(n,depth)=>{ const li=document.createElement('li'); const kids=n.kids||[];
     const label='<span class="n"><span class="t">'+esc(n.type)+'</span>'+(n.std?' <span class="s">→'+esc(n.std)+'</span>':'')+(n.page?' <span class="s">p.'+n.page+'</span>':'')+(n.alt?' <span class="s">alt: '+esc(n.alt)+'</span>':'')+(n.text?' '+esc(n.text):'')+'</span>';
-    if(kids.length){ const det=document.createElement('details'); det.open=depth<2; det.innerHTML='<summary>'+label+'</summary>'; const ul=document.createElement('ul'); for(const k of kids) ul.appendChild(build(k,depth+1)); det.appendChild(ul); li.appendChild(det); det.querySelector('.n').onclick=(e)=>{e.preventDefault();showBox(n,det.querySelector('.n'));}; }
-    else { li.innerHTML=label; li.querySelector('.n').onclick=()=>showBox(n,li.querySelector('.n')); }
+    if(kids.length){ const det=document.createElement('details'); det.open=depth<2; det.innerHTML='<summary>'+label+'</summary>'; const ul=document.createElement('ul'); for(const k of kids) ul.appendChild(build(k,depth+1)); det.appendChild(ul); li.appendChild(det); const s=det.querySelector('.n'); act(s,(e)=>{e.preventDefault();showBox(n,s);},false); }
+    else { li.innerHTML=label; const s=li.querySelector('.n'); act(s,()=>showBox(n,s),false); }
     return li; };
   const ul=document.createElement('ul'); for(const n of DATA.tree) ul.appendChild(build(n,0)); host.appendChild(ul);
 }
 function showBox(n,el){
-  document.querySelectorAll('.tree .n.on').forEach(e=>e.classList.remove('on')); el.classList.add('on');
+  press('.tree .n, .read p',e=>e===el);
   document.querySelectorAll('.box.tree').forEach(e=>e.remove());
   if(!n.box) return; const r=px(n.box); if(!r) return; const d=document.createElement('div'); d.className='box tree';
   d.style.left=r.l+'px'; d.style.top=r.t+'px'; d.style.width=Math.max(r.w,3)+'px'; d.style.height=Math.max(r.h,3)+'px';
@@ -320,7 +326,7 @@ function renderRead(){
   if(!pages.length){host.innerHTML='<div class="empty">Nothing is tagged, so a screen reader following the structure gets nothing.</div>';return;}
   for(const p of pages){ const h=document.createElement('h4'); h.textContent='page '+p; host.appendChild(h);
     for(const item of DATA.reading[p]){ const d=document.createElement('p'); d.className=item.type==='Artifact'?'art':''; d.innerHTML='<span class="t">'+esc(item.type)+'</span>'+esc(item.text);
-      if(item.box) d.onclick=()=>showBox({box:item.box},d); host.appendChild(d);} }
+      if(item.box) act(d,()=>showBox({box:item.box},d),false); host.appendChild(d);} }
 }
 function tallyLine(rows){ const t={}; for(const r of rows) t[r.status]=(t[r.status]||0)+1;
   const lab={fail:'fail',warning:'warning',pass:'pass','not-applicable':'not applicable',manual:'need a person','not-tested':'not tested'};
@@ -330,15 +336,17 @@ function renderCriteria(){
   const rows=DATA.criteria[FW]; $('#crittally').textContent=tallyLine(rows);
   const hide=$('#crithide').checked;
   for(const r of rows){ if(hide&&r.status==='not-applicable') continue;
-    const d=document.createElement('div'); d.className='row'+(CRIT&&CRIT.id===r.id&&CRIT.fw===FW?' on':'');
+    const chosen=!!(CRIT&&CRIT.id===r.id&&CRIT.fw===FW); const d=document.createElement('div'); d.className='row'+(chosen?' on':'');
     const grp={}; for(const x of (r.rules||[])) (grp[x.outcome]=grp[x.outcome]||[]).push(x.id);
     const rules=['fail','warning','info','pass','not-applicable','not-run'].filter(o=>grp[o]).map(o=>(['fail','warning','info'].includes(o)||grp[o].length<=4)?grp[o].join(', ')+' '+OUT[o]:grp[o].length+' rules '+OUT[o]).join(' · ');
     const beyond=(r.semantic||[]).filter(x=>x.outcome==='fail'||x.outcome==='warning').map(x=>x.id+' '+OUT[x.outcome]).join(' · ');
     d.innerHTML='<span class="st st-'+r.status+'">'+STL[r.status]+'</span><div><div class="nm">'+esc(r.id)+' '+esc(r.name)+(r.level?' <span class="lv">('+r.level+')</span>':'')+'</div>'
       +(rules?'<div class="rl">'+esc(rules)+'</div>':'')+(beyond?'<div class="beyond">beyond the protocol: '+esc(beyond)+'</div>':'')+(r.note?'<div class="note">'+esc(r.note)+'</div>':'')+'</div>';
-    d.onclick=()=>{ const ids=[...(r.rules||[]),...(r.semantic||[])].map(x=>x.id); if(!ids.length) return;
+    const ids=[...(r.rules||[]),...(r.semantic||[])].map(x=>x.id);
+    if(!ids.length) d.classList.add('inert');   // no rules behind it: nothing to filter, so not a control
+    else act(d,()=>{
       CRIT={id:r.id,fw:FW,rules:ids,label:r.id+' '+r.name}; $('#critfilter').style.display='block'; $('#critlabel').textContent='Findings for '+CRIT.label;
-      renderCriteria(); document.querySelector('.tabs button[data-tab="findings"]').click(); renderFindings(); };
+      renderCriteria(); document.querySelector('.tabs button[data-tab="findings"]').click(); renderFindings(); },chosen);
     host.appendChild(d); }
 }
 function clearCrit(){ CRIT=null; $('#critfilter').style.display='none'; renderFindings(); renderCriteria(); }
