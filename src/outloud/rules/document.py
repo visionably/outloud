@@ -9,6 +9,7 @@ import pikepdf
 
 from ..model import Document
 from ..registry import finding, rule
+from ._common import image_only_pages
 
 # A primary language subtag is two or three letters (ISO 639) or "x" for
 # private use; BCP 47 syntax also reserves longer ones that nothing uses, so a
@@ -26,7 +27,28 @@ def marked(doc: Document):
 @rule("DOC-002")
 def struct_tree(doc: Document):
     if doc.struct_root is None:
-        yield finding("DOC-002", "the catalog has no /StructTreeRoot")
+        scans = image_only_pages(doc)
+        if scans and len(scans) == len(doc.pages):
+            yield finding("DOC-002", "the catalog has no /StructTreeRoot; this file also has no text layer, so run OCR before tagging (see DOC-004)")
+        else:
+            yield finding("DOC-002", "the catalog has no /StructTreeRoot")
+
+
+@rule("DOC-004")
+def no_text_layer(doc: Document):
+    scans = image_only_pages(doc)
+    if not scans:
+        return
+    n = len(doc.pages)
+    pages = [p + 1 for p, _ in scans]
+    boxes = [b for _, bs in scans for b in bs][:40]
+    if len(scans) == n:
+        which = "the only page is" if n == 1 else "every page is"
+    else:
+        which = f"{len(scans)} of {n} pages {'is' if len(scans) == 1 else 'are'}"
+    listed = ", ".join(str(p) for p in pages[:12]) + (" …" if len(pages) > 12 else "")
+    yield finding("DOC-004", f"{which} an image with no text layer: a scan that was never OCR'd, which a screen reader reads as blank",
+                  page=pages[0], count=len(scans), evidence=f"pages {listed}" if len(scans) < n else None, boxes=boxes)
 
 
 @rule("DOC-003")

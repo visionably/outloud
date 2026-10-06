@@ -67,6 +67,14 @@ document:
     wcag: ["1.3.1"]
     severity: error
     fix: Review the tags, then set /Suspects false or remove it.
+  - id: DOC-004
+    title: Pages are images with no text layer
+    claim: A page is a large image with no text on it, a scan that was never OCR'd, so a screen reader reads it as blank and no amount of tagging can help until a text layer exists. A page whose image sits in a Figure with real alternative text is a described picture and is not counted.
+    layer: semantic
+    wcag: ["1.1.1", "1.4.5"]
+    requires: scanned
+    severity: error
+    fix: Run OCR first (OCRmyPDF, Acrobat's Recognize Text, or a scanning service) to add a text layer, check it against the page, then tag the document.
   - id: DOC-010
     title: Document has no title
     claim: The XMP metadata carries no dc:title (and the Info dictionary no /Title), so a screen reader announces the file name.
@@ -177,11 +185,12 @@ document:
 tagging:
   - id: TAG-001
     title: Content is neither tagged nor an artifact
-    claim: Text or graphics are painted outside any marked-content sequence, so a reader cannot know whether they are content or decoration; they are silently skipped.
+    claim: Text or graphics are painted outside any marked-content sequence, so a reader cannot know whether they are content or decoration; they are silently skipped. Without a structure tree at all the question does not arise (DOC-002 covers it), so the rule is not applicable there.
     layer: conformance
     clause: "7.1"
     matterhorn: "01"
     wcag: ["1.3.1", "1.3.2"]
+    requires: struct
     severity: error
     fix: Tag the content with a structure element, or mark it /Artifact if it is decoration or page furniture.
   - id: TAG-002
@@ -362,7 +371,7 @@ text:
     fix: Rebuild the /ToUnicode CMap from the font's own glyph names or cmap so each glyph maps to the character it draws.
   - id: TXT-005
     title: Text shows the .notdef glyph
-    claim: A text-showing operator references glyph 0 of a composite font, the .notdef box, so a character the author typed has no glyph and no meaning.
+    claim: A text-showing operator uses a code that reaches the .notdef glyph in its font, in any rendering mode, so a character the author typed has no glyph and no meaning. Judged against the embedded font program (CFF charset, TrueType cmap, Type 1 charstrings, Type 3 CharProcs); Acrobat's Paper Capture OCR layers use a stub font with no glyphs at all, so every hidden character fails.
     layer: conformance
     clause: "7.21.8"
     matterhorn: "31"

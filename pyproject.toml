@@ -1,6 +1,6 @@
 [project]
 name = "outloud"
-version = "0.2.0"
+version = "0.2.1"
 description = "What a PDF says out loud: a PDF accessibility checker for the terminal, CI and browser. PDF/UA-1 and WCAG 2.2, plus the semantic checks a validator cannot make."
 readme = "README.md"
 license = "Apache-2.0"

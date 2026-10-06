@@ -127,3 +127,40 @@ def run_boxes(page_index: int, runs: Iterable, limit: int = 40) -> list[dict]:
         if len(out) >= limit:
             break
     return out
+
+
+def image_only_pages(doc: Document) -> list[tuple[int, list]]:
+    """Pages that are a picture of a page: a large image and no text to speak of.
+
+    Returns [(page_index, [image boxes])]. A page whose big image sits inside a
+    Figure that carries real alternative text is left out: that is a described
+    picture, not an undescribed scan, and the figure rules judge the text.
+    """
+    cached = getattr(doc, "_image_only_pages", None)
+    if cached is not None:
+        return cached
+    out: list[tuple[int, list]] = []
+    for page in doc.pages:
+        pc = doc.content(page.index)
+        chars = sum(len(r.text.strip()) for r in pc.runs)
+        if chars > 5:
+            continue
+        area = max(1.0, page.width * page.height)
+        big = [i for i in pc.images if i.bbox and (i.bbox[2] - i.bbox[0]) * (i.bbox[3] - i.bbox[1]) >= 0.5 * area]
+        if not big:
+            continue
+        described = False
+        for i in big:
+            if i.mcid is None:
+                continue
+            for el in doc.mc_owners.get((page.index, i.stream, i.mcid), []):
+                node = el
+                while node is not None and node.type != "Figure":
+                    node = node.parent
+                if node is not None and len((node.alt or "").split()) >= 3:
+                    described = True
+        if described:
+            continue
+        out.append((page.index, [box(page.index, i.bbox) for i in big if box(page.index, i.bbox)]))
+    doc._image_only_pages = out
+    return out

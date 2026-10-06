@@ -629,3 +629,73 @@ def test_viewer_app_endpoints(tmp):
         httpd.server_close()
         store.close()
     assert not os.path.isdir(store.tmpdir)
+
+
+# ── issues #4, #5, #6 (October 2026) ────────────────────────────────────
+
+def test_doc_004_image_only_page_without_text(tmp):
+    import pymupdf
+    src = pymupdf.open(); page = src.new_page()
+    page.insert_text((72, 100), "Annual report 1998", fontsize=24)
+    page.insert_text((72, 140), "This paragraph was scanned from paper and never OCR'd.", fontsize=11)
+    scan = pymupdf.open(); p = scan.new_page(width=page.rect.width, height=page.rect.height)
+    p.insert_image(p.rect, pixmap=page.get_pixmap(dpi=100))
+    path = str(tmp / "scan-no-ocr.pdf"); scan.save(path)
+    r = check(path)
+    assert_hits(r, "DOC-004", ERROR)
+    hit = next(f for f in r.findings if f.rule == "DOC-004")
+    assert hit.boxes and hit.boxes[0]["page"] == 1
+    assert "run OCR" in next(f.message for f in r.findings if f.rule == "DOC-002")
+    wcag = {row["id"]: row["status"] for row in r.criteria["wcag22"]}
+    assert wcag["1.1.1"] == "fail" and wcag["1.4.5"] == "fail"
+    assert next(x for x in r.runs if x.rule == "TAG-001").status == "not-applicable"
+
+
+def test_doc_004_not_raised_for_a_described_figure(tmp):
+    r = run(Fixture().figure(alt="A photograph of the treatment works seen from the river bank", attrs={"width": 480, "height": 700}), tmp, "big_fig")
+    assert "DOC-004" not in rules_hit(r)
+
+
+def test_doc_004_not_raised_for_text_pages(tmp):
+    assert "DOC-004" not in rules_hit(run(clean(), tmp, "clean_doc004"))
+
+
+def test_bordercolor_per_side_arrays_do_not_stop_the_walk(tmp):
+    import pikepdf
+    pdf = pikepdf.new()
+    font = pdf.make_indirect(pikepdf.Dictionary(Type=pikepdf.Name.Font, Subtype=pikepdf.Name.Type1, BaseFont=pikepdf.Name.Helvetica))
+    page = pdf.add_blank_page(page_size=(612, 792))
+    page.obj.Resources = pikepdf.Dictionary(Font=pikepdf.Dictionary(F1=font))
+    page.obj.Contents = pdf.make_stream(b"/P <</MCID 0>> BDC BT /F1 12 Tf 72 720 Td (Cell) Tj ET EMC")
+    page.obj.StructParents = 0
+    root = pdf.make_indirect(pikepdf.Dictionary(Type=pikepdf.Name.StructTreeRoot))
+    doc_el = pdf.make_indirect(pikepdf.Dictionary(Type=pikepdf.Name.StructElem, S=pikepdf.Name.Document, P=root))
+    el = pdf.make_indirect(pikepdf.Dictionary(
+        Type=pikepdf.Name.StructElem, S=pikepdf.Name.P, P=doc_el, Pg=page.obj, K=0,
+        A=pikepdf.Dictionary(O=pikepdf.Name.Table, BorderColor=pikepdf.Array([pikepdf.Array([0, 0, 0]), None, pikepdf.Array([0, 0, 0]), pikepdf.Array([0, 0, 0])]),
+                             BorderStyle=pikepdf.Dictionary(Odd=pikepdf.Name.Solid))))
+    doc_el.K = pikepdf.Array([el]); root.K = doc_el
+    root.ParentTree = pdf.make_indirect(pikepdf.Dictionary(Nums=pikepdf.Array([0, pikepdf.Array([el])])))
+    pdf.Root.StructTreeRoot = root; pdf.Root.MarkInfo = pikepdf.Dictionary(Marked=True)
+    path = str(tmp / "bordercolor.pdf"); pdf.save(path)
+    r = check(path)
+    assert r.error is None
+    assert not [x for x in r.runs if x.status == "crashed"]
+    from outloud.model import Document
+    d = Document(path)
+    el = next(e for e in d.elements if e.type == "P")
+    assert el.attrs["Table"]["BorderColor"] == [[0.0, 0.0, 0.0], None, [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
+    d.close()
+
+
+def test_txt_005_code_without_a_glyph_in_the_embedded_font(tmp):
+    r = run(Fixture(notdef_code=True).p("Six xylophones in a box."), tmp, "notdef")
+    assert_hits(r, "TXT-005", ERROR)
+    hit = next(f for f in r.findings if f.rule == "TXT-005")
+    assert hit.count == 3 and "0x3ff" in (hit.evidence or "")
+
+
+def test_txt_005_quiet_on_the_clean_fixture(tmp):
+    r = run(clean(), tmp, "clean_notdef")
+    assert "TXT-005" not in rules_hit(r)
+    assert next(x for x in r.runs if x.rule == "TXT-005").outcome == "pass"

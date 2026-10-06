@@ -14,7 +14,7 @@
   <a href="https://github.com/visionably/outloud/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="Apache 2.0"></a>
   <img src="https://img.shields.io/badge/python-3.10%2B-blue.svg" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg" alt="macOS, Linux, Windows">
-  <img src="https://img.shields.io/badge/rules-90-c25c29.svg" alt="90 rules">
+  <img src="https://img.shields.io/badge/rules-91-c25c29.svg" alt="91 rules">
   <a href="https://github.com/visionably/outloud/blob/main/CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-2c6e49.svg" alt="PRs welcome"></a>
 </p>
 
@@ -147,7 +147,7 @@ Measured on 17 September 2026 on one machine: veraPDF 1.26.5 (`--flavour ua1`) a
 
 | Corpus | Files | outloud agrees with veraPDF | pdfa11y agrees with veraPDF | veraPDF | outloud | pdfa11y |
 |---|---|---|---|---|---|---|
-| Fixtures (one defect each, built from scratch) | 58 | 58 of 58 comparable rules | 51 | 34.5 s | 0.2 s | 0.1 s |
+| Fixtures (one defect each, built from scratch) | 59 | 59 of 59 comparable rules | 51 | 34.5 s | 0.2 s | 0.1 s |
 | Bank letters, remediated to PDF/UA-1 | 29 | 29 of 29 | 0 | 30.8 s | 6.9 s | 0.8 s |
 | Bank letters, as printed by Chrome | 29 | 29 of 29 | 29 | 23.7 s | 2.4 s | 0.3 s |
 | Production corpus, originals | 23 | 23 of 23 | 23 | 20.9 s | 9.8 s | 1.2 s |
@@ -159,7 +159,7 @@ Speed is honest rather than headline: 2 to 10 times faster than veraPDF, mostly 
 
 ## The rules
 
-90 rules, 88 implemented, 2 planned and reported as "not run" so the gap is visible. Every rule is data in [`catalogue.yaml`](https://github.com/visionably/outloud/blob/main/src/outloud/rules/catalogue.yaml) and documented in [`docs/RULES.md`](https://github.com/visionably/outloud/blob/main/docs/RULES.md), which is generated from it, along with an index by Matterhorn checkpoint and by WCAG criterion.
+91 rules, 89 implemented, 2 planned and reported as "not run" so the gap is visible. Every rule is data in [`catalogue.yaml`](https://github.com/visionably/outloud/blob/main/src/outloud/rules/catalogue.yaml) and documented in [`docs/RULES.md`](https://github.com/visionably/outloud/blob/main/docs/RULES.md), which is generated from it, along with an index by Matterhorn checkpoint and by WCAG criterion.
 
 | Group | Examples |
 |---|---|
@@ -179,7 +179,7 @@ Speed is honest rather than headline: 2 to 10 times faster than veraPDF, mostly 
 Fixtures are built from nothing by [`tests/builder.py`](https://github.com/visionably/outloud/blob/main/tests/builder.py): a subset TrueType font with a ToUnicode map, marked content, a structure tree with a parent tree, XMP. Every negative test bends exactly one thing in a clean baseline and asserts that one rule fires.
 
 ```bash
-.venv/bin/python -m pytest              # 84 tests
+.venv/bin/python -m pytest              # 95 tests
 .venv/bin/python scripts/make_fixtures.py
 .venv/bin/python scripts/make_screenshots.py    # regenerates the pictures on this page
 ```

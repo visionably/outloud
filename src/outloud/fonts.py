@@ -116,6 +116,20 @@ class FontInfo:
     codes_shown: set = field(default_factory=set)
     unmapped_codes: set = field(default_factory=set)
     pages: set = field(default_factory=set)
+    # Codes (simple fonts) or CIDs (Type0 with an Identity CMap) that resolve to a real
+    # glyph in the embedded program; None when the program could not be read, is not
+    # embedded, or the CMap is not Identity, in which case only code 0 is judged.
+    glyphs: Optional[set] = None
+    identity_cmap: bool = True
+    notdef_codes: set = field(default_factory=set)
+
+    def is_notdef(self, code: int) -> bool:
+        """Does this code reach the .notdef glyph? ISO 14289-1 7.21.8 forbids showing it in any render mode."""
+        if self.code_width >= 2:
+            if code == 0 and self.identity_cmap:
+                return True
+            return self.glyphs is not None and self.identity_cmap and code not in self.glyphs
+        return self.glyphs is not None and code not in self.glyphs
 
     @property
     def can_map(self) -> bool:
@@ -200,6 +214,256 @@ def _encoding_map(font: pikepdf.Dictionary, symbolic: bool) -> dict[int, int]:
                 except Exception:  # noqa: BLE001
                     pass
     return out
+
+
+# ── which codes have a glyph ─────────────────────────────────────────────
+
+def _std_names(base: Optional[str]) -> dict[int, str]:
+    """code -> glyph name for the predefined simple-font encodings."""
+    out: dict[int, str] = {}
+    try:
+        if base == "WinAnsiEncoding":
+            from fontTools.agl import UV2AGL  # noqa: PLC0415
+            for code in range(32, 256):
+                try:
+                    ch = bytes([code]).decode("cp1252")
+                except Exception:  # noqa: BLE001
+                    out[code] = "bullet"          # Annex D: unused WinAnsi codes above 127 show a bullet
+                    continue
+                if code == 0xA0:
+                    out[code] = "space"
+                elif code == 0xAD:
+                    out[code] = "hyphen"
+                else:
+                    # Annex D: in WinAnsiEncoding every unused code above octal 40 shows a bullet,
+                    # so 0x7F and the undefined 0x80–0x9F codes have a glyph, not .notdef.
+                    out[code] = UV2AGL.get(ord(ch)) or "bullet"
+        elif base == "MacRomanEncoding":
+            from fontTools.encodings.MacRoman import MacRoman  # noqa: PLC0415
+            for code, name in enumerate(MacRoman):
+                if name and name != ".notdef":
+                    out[code] = name
+        elif base in ("StandardEncoding", "PDFDocEncoding"):
+            from fontTools.encodings.StandardEncoding import StandardEncoding  # noqa: PLC0415
+            for code, name in enumerate(StandardEncoding):
+                if name and name != ".notdef":
+                    out[code] = name
+    except Exception:  # noqa: BLE001
+        return {}
+    return out
+
+
+def _encoding_names(font: pikepdf.Dictionary, symbolic: bool, builtin: Optional[dict[int, str]]) -> dict[int, str]:
+    """code -> glyph name after the font's /Encoding: base table (or the program's built-in one), then /Differences."""
+    enc = font.get("/Encoding")
+    base = None
+    diffs = None
+    if isinstance(enc, pikepdf.Name):
+        base = str(enc)[1:]
+    elif isinstance(enc, pikepdf.Dictionary):
+        be = enc.get("/BaseEncoding")
+        base = str(be)[1:] if isinstance(be, pikepdf.Name) else None
+        diffs = enc.get("/Differences")
+    if base is not None:
+        names = _std_names(base)
+    elif builtin:
+        names = dict(builtin)
+    elif not symbolic:
+        names = _std_names("StandardEncoding")
+    else:
+        names = {}
+    if isinstance(diffs, pikepdf.Array):
+        code = 0
+        for item in diffs:
+            if isinstance(item, pikepdf.Name):
+                names[code] = str(item)[1:]
+                code += 1
+            else:
+                try:
+                    code = int(item)
+                except Exception:  # noqa: BLE001
+                    pass
+    return names
+
+
+def _type1_program(data: bytes) -> tuple[set, dict[int, str]]:
+    """(glyph names, built-in encoding) of a Type 1 font program (FontFile), PFA or PFB-less raw."""
+    from fontTools.misc import eexec  # noqa: PLC0415
+
+    head, _, tail = data.partition(b"eexec")
+    builtin: dict[int, str] = {}
+    if b"StandardEncoding" in head:
+        builtin = _std_names("StandardEncoding")
+    for m in re.finditer(rb"dup\s+(\d+)\s*/(\S+)\s+put", head):
+        builtin[int(m.group(1))] = m.group(2).decode("latin-1")
+    tail = tail.lstrip(b"\r\n\t ")
+    if re.fullmatch(rb"[0-9A-Fa-f\s]+", tail[:64] or b"x"):
+        try:
+            tail = bytes.fromhex(re.sub(rb"\s+", b"", tail).decode("ascii"))
+        except Exception:  # noqa: BLE001
+            pass
+    plain, _r = eexec.decrypt(tail, 55665)
+    names = {m.group(1).decode("latin-1") for m in re.finditer(rb"/([^\s/{}\[\]()<>]+)\s+\d+\s+(?:RD|-\|)[ ]", plain)}
+    return names, builtin
+
+
+def _cff_program(data: bytes) -> tuple[Optional[set], dict[int, str], bool]:
+    """(glyph names or CIDs, built-in encoding, cid_keyed) of a bare CFF program (FontFile3)."""
+    import io  # noqa: PLC0415
+    from fontTools.cffLib import CFFFontSet  # noqa: PLC0415
+
+    cff = CFFFontSet()
+    cff.decompile(io.BytesIO(data), None)
+    top = cff.topDictIndex[0]
+    charset = list(top.charset or [])
+    if hasattr(top, "ROS"):
+        cids = set()
+        for i, n in enumerate(charset):
+            if n.startswith("cid") and n[3:].isdigit():
+                cids.add(int(n[3:]))
+            elif i:
+                cids.add(i)
+        return cids, {}, True
+    names = {n for n in charset if n != ".notdef"}
+    builtin: dict[int, str] = {}
+    try:
+        enc = top.Encoding
+        if isinstance(enc, (list, tuple)):
+            builtin = {c: n for c, n in enumerate(enc) if n and n != ".notdef"}
+        elif isinstance(enc, str):
+            builtin = _std_names(enc if enc.endswith("Encoding") else enc + "Encoding")
+    except Exception:  # noqa: BLE001
+        pass
+    return names, builtin, False
+
+
+def _truetype_codes(data: bytes, names: dict[int, str], symbolic: bool) -> Optional[set]:
+    """Codes of a simple TrueType font that reach a glyph, following ISO 32000-1 9.6.6.4."""
+    import io  # noqa: PLC0415
+    from fontTools.ttLib import TTFont  # noqa: PLC0415
+
+    tt = TTFont(io.BytesIO(data), lazy=True)
+    n_glyphs = tt["maxp"].numGlyphs
+    cmap = tt["cmap"] if "cmap" in tt else None
+    if cmap is None:
+        return {c for c in range(256) if c < n_glyphs}     # no cmap: the code is the glyph index
+    sub = {(t.platformID, t.platEncID): t.cmap for t in cmap.tables}
+    ms = sub.get((3, 1)); mac = sub.get((1, 0)); sym = sub.get((3, 0))
+    post = None
+    try:
+        post = set(tt.getGlyphOrder())
+    except Exception:  # noqa: BLE001
+        pass
+    out = set()
+    for code in range(256):
+        name = names.get(code)
+        hit = False
+        if symbolic or not name:
+            if sym and any(k in sym for k in (code, 0xF000 + code, 0xF100 + code, 0xF200 + code)):
+                hit = True
+            elif mac and code in mac:
+                hit = True
+        if not hit and name:
+            u = _glyph_to_unicode(name)
+            if ms and u is not None and u in ms:
+                hit = True
+            elif mac:
+                try:
+                    mc = chr(u).encode("mac_roman")[0] if u is not None else None
+                    hit = mc is not None and mc in mac
+                except Exception:  # noqa: BLE001
+                    hit = False
+            if not hit and post and name in post:
+                hit = True
+        if not hit and not name and not symbolic and ms is None and mac is None and sym is None:
+            hit = code < n_glyphs
+        if hit:
+            out.add(code)
+    return out
+
+
+def _cid_glyphs(d0: pikepdf.Dictionary, fd: pikepdf.Dictionary) -> Optional[set]:
+    """CIDs of a CIDFont that reach a glyph in its embedded program, or None when unknown."""
+    import io  # noqa: PLC0415
+
+    sub = str(d0.get("/Subtype") or "")
+    ff2, ff3 = fd.get("/FontFile2"), fd.get("/FontFile3")
+    if sub == "/CIDFontType0" and isinstance(ff3, pikepdf.Stream):
+        data = ff3.read_bytes()
+        if data[:4] == b"OTTO":
+            from fontTools.ttLib import TTFont  # noqa: PLC0415
+            tt = TTFont(io.BytesIO(data), lazy=True)
+            cff = tt["CFF "].cff
+            top = cff.topDictIndex[0]
+            charset = list(top.charset or [])
+            if hasattr(top, "ROS"):
+                return {int(n[3:]) for n in charset if n.startswith("cid") and n[3:].isdigit()}
+            return set(range(1, len(charset)))
+        glyphs, _b, cid_keyed = _cff_program(data)
+        return glyphs if cid_keyed else set(range(1, len(glyphs) + 1))
+    if sub == "/CIDFontType2" and isinstance(ff2, pikepdf.Stream):
+        from fontTools.ttLib import TTFont  # noqa: PLC0415
+        tt = TTFont(io.BytesIO(ff2.read_bytes()), lazy=True)
+        n = tt["maxp"].numGlyphs
+        c2g = d0.get("/CIDToGIDMap")
+        if isinstance(c2g, pikepdf.Stream):
+            m = c2g.read_bytes()
+            return {cid for cid in range(len(m) // 2) if 0 < int.from_bytes(m[2 * cid:2 * cid + 2], "big") < n}
+        return set(range(1, n))
+    return None
+
+
+def glyph_coverage(font: pikepdf.Dictionary, fi: "FontInfo") -> None:
+    """Fill fi.glyphs (and fi.identity_cmap) from the embedded program; leave None when it cannot be known."""
+    try:
+        if fi.type3:
+            procs = font.get("/CharProcs")
+            names = _encoding_names(font, True, {})
+            if isinstance(procs, pikepdf.Dictionary):
+                have = {k[1:] for k in procs.keys()}
+                fi.glyphs = {c for c, n in names.items() if n in have}
+            return
+        fd = _descriptor(font)
+        if fd is None or not fi.embedded:
+            return
+        if fi.subtype == "Type0":
+            enc = font.get("/Encoding")
+            fi.identity_cmap = isinstance(enc, pikepdf.Name) and str(enc) in ("/Identity-H", "/Identity-V")
+            if not fi.identity_cmap:
+                return
+            df = font.get("/DescendantFonts")
+            d0 = df[0] if isinstance(df, pikepdf.Array) and len(df) else None
+            if isinstance(d0, pikepdf.Dictionary):
+                fi.glyphs = _cid_glyphs(d0, fd)
+            return
+        ff1, ff2, ff3 = fd.get("/FontFile"), fd.get("/FontFile2"), fd.get("/FontFile3")
+        if isinstance(ff2, pikepdf.Stream):
+            names = _encoding_names(font, fi.symbolic, None)
+            fi.glyphs = _truetype_codes(ff2.read_bytes(), names, fi.symbolic)
+            return
+        if isinstance(ff1, pikepdf.Stream):
+            glyph_names, builtin = _type1_program(ff1.read_bytes())
+        elif isinstance(ff3, pikepdf.Stream):
+            data = ff3.read_bytes()
+            if data[:4] == b"OTTO":
+                from fontTools.ttLib import TTFont  # noqa: PLC0415
+                import io  # noqa: PLC0415
+                tt = TTFont(io.BytesIO(data), lazy=True)
+                glyph_names = set(tt.getGlyphOrder()) - {".notdef"}
+                builtin = {}
+            else:
+                g, builtin, cid_keyed = _cff_program(data)
+                if cid_keyed:
+                    return
+                glyph_names = g or set()
+        else:
+            return
+        if not glyph_names:
+            return
+        names = _encoding_names(font, fi.symbolic, builtin)
+        fi.glyphs = {c for c, n in names.items() if n in glyph_names}
+    except Exception:  # noqa: BLE001
+        fi.glyphs = None
 
 
 def _descriptor(font: pikepdf.Dictionary) -> Optional[pikepdf.Dictionary]:
@@ -307,6 +571,7 @@ def font_info(font: pikepdf.Dictionary, key: tuple) -> FontInfo:
         except Exception:  # noqa: BLE001
             pass
     fi.widths, fi.default_width = _widths(font, fi.subtype)
+    glyph_coverage(font, fi)
     return fi
 
 

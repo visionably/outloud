@@ -16,7 +16,7 @@ from .findings import Result
 from .model import Document
 from .registry import features, load_catalogue, run_rules
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 
 def check(path: str, source: Optional[str] = None, only=None, skip=None, layers=None) -> Result:

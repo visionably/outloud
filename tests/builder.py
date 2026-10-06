@@ -71,7 +71,8 @@ class Fixture:
                  suspects: bool = False, role_map: Optional[dict] = None, info_title: Optional[str] = None,
                  tounicode: bool = True, tounicode_collide: bool = False, encrypt_no_access: bool = False,
                  widths: tuple = (612, 792), no_tabs: bool = False, oc_config_no_name: bool = False, oc_as: bool = False,
-                 no_cidtogid: bool = False, outlines: bool = False, tounicode_map: Optional[dict] = None):
+                 no_cidtogid: bool = False, outlines: bool = False, tounicode_map: Optional[dict] = None,
+                 notdef_code: bool = False):
         self.title, self.lang, self.marked, self.tagged = title, lang, marked, tagged
         self.display_title, self.ua_part, self.embed_font, self.suspects = display_title, ua_part, embed_font, suspects
         self.role_map, self.info_title, self.tounicode, self.tounicode_collide = role_map or {}, info_title, tounicode, tounicode_collide
@@ -79,6 +80,7 @@ class Fixture:
         self.tounicode_map = tounicode_map or {}   # char -> the text its /ToUnicode entry gives, e.g. "ff"
         self.no_tabs = no_tabs
         self.oc_config_no_name, self.oc_as, self.no_cidtogid, self.outlines = oc_config_no_name, oc_as, no_cidtogid, outlines
+        self.notdef_code = notdef_code
         self.width, self.height = widths
         self.pages: list[list[Block]] = [[]]
 
@@ -185,7 +187,11 @@ class Fixture:
         if self.tounicode:
             font.ToUnicode = tu
         self._gid_of = gid_of
-        self._encode = lambda s: b"".join((gid_of.get(c, 0)).to_bytes(2, "big") for c in s)
+        if self.notdef_code:
+            # Every "x" is shown as glyph 0x3FF, which the subset font does not have: it reaches .notdef.
+            self._encode = lambda s: b"".join((0x3FF if c == "x" else gid_of.get(c, 0)).to_bytes(2, "big") for c in s)
+        else:
+            self._encode = lambda s: b"".join((gid_of.get(c, 0)).to_bytes(2, "big") for c in s)
         return pdf.make_indirect(font)
 
     # ── building ──────────────────────────────────────────────────────────

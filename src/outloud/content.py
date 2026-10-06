@@ -109,7 +109,8 @@ class PageContent:
     lines: list = field(default_factory=list)           # Line objects, top of page first
     raw_run_count: int = 0
     nesting_events: list = field(default_factory=list)  # (stream, mcid) involved in an Artifact/MCID nesting
-    notdef_shown: int = 0                               # glyph 0 of a composite font shown
+    notdef_shown: int = 0                               # text codes that reach the .notdef glyph
+    notdef_by_font: dict = field(default_factory=dict)  # base font name -> count
 
     @property
     def text(self) -> str:
@@ -215,8 +216,12 @@ class _Walker:
                 codes = list(raw) if (fi is None or fi.code_width <= 1) else [
                     int.from_bytes(raw[i:i + fi.code_width], "big") for i in range(0, len(raw) - (fi.code_width - 1), fi.code_width)]
                 start = x_adv
-                if fi is not None and fi.code_width == 2 and 0 in codes:
-                    self.out.notdef_shown += codes.count(0)
+                if fi is not None:
+                    bad = [c for c in codes if fi.is_notdef(c)]
+                    if bad:
+                        self.out.notdef_shown += len(bad)
+                        fi.notdef_codes.update(bad)
+                        self.out.notdef_by_font[fi.base_font] = self.out.notdef_by_font.get(fi.base_font, 0) + len(bad)
                 for code in codes:
                     w0 = (fi.width_of(code) if fi is not None else 500.0) / 1000.0
                     adv = (w0 * size + st.tc + (st.tw if code == 32 and (fi is None or fi.code_width == 1) else 0.0)) * st.tz

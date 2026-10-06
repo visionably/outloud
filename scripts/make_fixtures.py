@@ -79,6 +79,7 @@ CASES = {
     "fail-TXT-007-no-cidtogidmap": lambda: Fixture(no_cidtogid=True).p("Text without a glyph map."),
     "warn-NAV-001-long-document-no-bookmarks": lambda: _long(Fixture()),
     "pass-NAV-001-long-document-with-bookmarks": lambda: _long(Fixture(outlines=True)),
+    "fail-TXT-005-code-reaches-notdef": lambda: Fixture(notdef_code=True).p("Six xylophones in a box."),
 }
 
 

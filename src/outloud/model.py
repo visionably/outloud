@@ -156,6 +156,28 @@ def _str(v) -> Optional[str]:
         return None
 
 
+def _attr_value(v, depth: int = 0):
+    """A structure attribute value as plain Python. Arrays nest (BorderColor may be four
+    per-side colours, ISO 32000-1 Table 344), null is None, and anything else that is not
+    a number becomes its string form: an attribute no rule reads must never stop the walk."""
+    if v is None or depth > 6:
+        return None
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, pikepdf.Name):
+        return str(v)[1:]
+    if isinstance(v, pikepdf.String):
+        return str(v)
+    if isinstance(v, pikepdf.Array):
+        return [_attr_value(x, depth + 1) for x in v]
+    if isinstance(v, pikepdf.Dictionary):
+        return {str(k)[1:]: _attr_value(x, depth + 1) for k, x in v.items()}
+    try:
+        return float(v)
+    except Exception:  # noqa: BLE001
+        return _str(v)
+
+
 def _name(v) -> Optional[str]:
     if isinstance(v, pikepdf.Name):
         return str(v)[1:]
@@ -379,18 +401,7 @@ class Document:
                 for k, v in it.items():
                     if k == "/O":
                         continue
-                    key = k[1:]
-                    if isinstance(v, pikepdf.Name):
-                        d[key] = str(v)[1:]
-                    elif isinstance(v, pikepdf.Array):
-                        d[key] = [(_name(x) if isinstance(x, pikepdf.Name) else (str(x) if isinstance(x, pikepdf.String) else (float(x) if isinstance(x, (int, float, pikepdf.Object)) and not isinstance(x, pikepdf.Dictionary) else None))) for x in v]
-                    elif isinstance(v, pikepdf.String):
-                        d[key] = str(v)
-                    else:
-                        try:
-                            d[key] = float(v) if not isinstance(v, bool) else v
-                        except Exception:  # noqa: BLE001
-                            d[key] = _str(v)
+                    d[k[1:]] = _attr_value(v)
         return out
 
     @cached_property

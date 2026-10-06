@@ -101,9 +101,14 @@ def mapping_quality(doc: Document):
 @rule("TXT-005")
 def notdef_glyph(doc: Document):
     for page in doc.pages:
-        n = doc.content(page.index).notdef_shown
-        if n:
-            yield finding("TXT-005", f"{n} glyph(s) shown are glyph 0 (.notdef) of a composite font", page=page.number, count=n)
+        pc = doc.content(page.index)
+        n = pc.notdef_shown
+        if not n:
+            continue
+        fonts = sorted(pc.notdef_by_font.items(), key=lambda kv: -kv[1])
+        codes = sorted({c for f in doc.fonts.values() if f.base_font in pc.notdef_by_font for c in f.notdef_codes})
+        yield finding("TXT-005", f"{n} glyph(s) shown reach the .notdef glyph (" + ", ".join(f"{name}: {k}" for name, k in fonts[:3]) + ")",
+                      page=page.number, count=n, evidence="codes " + ", ".join(hex(c) for c in codes[:8]) if codes else None)
 
 
 @rule("TXT-006")
